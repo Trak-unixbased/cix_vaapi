@@ -1,0 +1,20 @@
+include_directories(${CMAKE_CURRENT_LIST_DIR})
+
+set(SOURCES
+    ${SOURCES}
+    ${CMAKE_CURRENT_LIST_DIR}/parser.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/parser.h
+    ${CMAKE_CURRENT_LIST_DIR}/parser_h264.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/parser_h264.h
+    ${CMAKE_CURRENT_LIST_DIR}/parser_hevc.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/parser_hevc.h
+    ${CMAKE_CURRENT_LIST_DIR}/parser_vp9.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/parser_vp9.h
+    ${CMAKE_CURRENT_LIST_DIR}/parser_av1.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/parser_av1.h
+    ${CMAKE_CURRENT_LIST_DIR}/parser_bsr.c
+    ${CMAKE_CURRENT_LIST_DIR}/parser_bsr.h
+    ${CMAKE_CURRENT_LIST_DIR}/slice.h
+    ${CMAKE_CURRENT_LIST_DIR}/sequence.h
+    PARENT_SCOPE
+)

@@ -1,0 +1,111 @@
+<mxfile host="65bd71144e">
+    <diagram id="mI0uaiGUOfwP3opL-6pD" name="SW Stack">
+        <mxGraphModel dx="1831" dy="942" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="3" value="libva" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="200" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="cix-vaapi" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="250" width="600" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="5" value="Linlon V8 V4L2 Driver" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="330" width="600" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="nErotZG52-Hw5jryqwqF-5" value="ffmpeg/gstreamer/..." style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="150" width="360" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="nErotZG52-Hw5jryqwqF-6" value="Applications" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="100" width="600" height="40" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+    <diagram id="bT9V7yzlAmnxz8k664Xe" name="cix-vaapi">
+        <mxGraphModel dx="2133" dy="942" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-1" value="DDI Layer" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="120" width="530" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-2" value="Device Manager" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="170" width="230" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-3" value="V4L2 Stateful Device" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="130" y="180" width="210" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-4" value="Other Devices" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="130" y="260" width="100" height="140" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-6" value="Tools" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="580" y="170" width="70" height="110" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-7" value="Log&lt;div&gt;System&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="180" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-8" value="Dump&lt;div&gt;System&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="590" y="220" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-9" value="Utils" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="360" y="170" width="210" height="270" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-10" value="Packer" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="180" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-11" value="Parser" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" parent="1" vertex="1">
+                    <mxGeometry x="370" y="260" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-12" value="H.264" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="190" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-13" value="HEVC" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="190" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-14" value="H.264" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="380" y="270" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-15" value="HEVC" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="440" y="270" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-16" value="Decoder" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="190" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-17" value="Encoder" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="240" y="190" width="90" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-18" value="AV1" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="190" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-19" value="AV1" style="rounded=0;whiteSpace=wrap;html=1;" parent="1" vertex="1">
+                    <mxGeometry x="500" y="270" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="e0xKdjC2LP675MrJmHpH-20" value="&lt;ul&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;DDI layer:&lt;/b&gt;&amp;nbsp;Connect to libva,&amp;nbsp; and implement all the DDI functions.&lt;/font&gt;&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Device Manager&lt;/b&gt;:&amp;nbsp;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;Open media device for decoding or encoding, and m&lt;/span&gt;anage all the VA buffers/surfaces used by all the codecs. It creates codecs (&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;V4L2 Stateful decoder or encoder&lt;/span&gt;)&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;&amp;nbsp;in CreateContext(), and then calls into the codec object to create V4L2 buffers which will be bound with different VA surfaces or VA buffers. It resides between codec and DDI layer to pass data.&amp;nbsp;&lt;/span&gt;The following objects are maintained in device manager:&lt;/font&gt;&lt;/li&gt;&lt;ul&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Video codecs&lt;/b&gt;: one device could have multiple codec instances opened.&amp;nbsp;&lt;/font&gt;&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Surface&lt;/b&gt;: Used as decode output or encode input. One surface can be used by different codecs.&lt;/font&gt;&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Buffers&lt;/b&gt;: All the codec input/output data should be stored in buffers.&amp;nbsp; Buffer memory can be in system DMA heap or normal system memory.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li&gt;&lt;span style=&quot;background-color: transparent;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;V4L2 Stateful Decoder&lt;/b&gt;: Maintains V4L2 M2M stateful decoder specific methods and data. It also creates packer and parser to repack headers for different video formats, like SPS, PPS and slice header.&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;li style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); background-color: transparent;&quot;&gt;&lt;b style=&quot;color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;V4L2 Stateful Encoder&lt;/b&gt;: Maintains V4L2 M2M stateful encoder specific methods and data. It also creates extractor to fetch useful parameters for encoder configuration.&lt;/span&gt;&lt;/li&gt;&lt;li&gt;&lt;span style=&quot;background-color: transparent;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Packer&lt;/b&gt;: video format specific logics for header packing, including emulation prevention bytes adding. Different video formats should have different implementation.&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;span style=&quot;background-color: transparent;&quot;&gt;&lt;b&gt;Parser&lt;/b&gt;:&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;video format specific logics for&amp;nbsp;header parsing, including emulation prevention bytes removing.&lt;/span&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;&amp;nbsp;Different video formats should have different implementation.&lt;/span&gt;&lt;/font&gt;&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;span style=&quot;color: rgb(63, 63, 63);&quot;&gt;&lt;b&gt;Extractor&lt;/b&gt;: Extract required encode parameters from&amp;nbsp;&lt;/span&gt;&lt;/font&gt;VAEncSequenceParameterBufferXXX, VAEncPictureParameterBufferXXX and&amp;nbsp;VAEncSliceParameterBufferXXX, like coded buffer ID, GOP size, B frames, frame QP, etc. Used by Encoder only.&lt;/li&gt;&lt;li&gt;&lt;font face=&quot;Helvetica&quot;&gt;&lt;b&gt;Log System&lt;/b&gt;: debug log control&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;" style="text;html=1;align=left;verticalAlign=top;whiteSpace=wrap;rounded=0;" parent="1" vertex="1">
+                    <mxGeometry x="120" y="540" width="560" height="490" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-1" value="Extractor" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=bottom;" vertex="1" parent="1">
+                    <mxGeometry x="370" y="340" width="190" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-2" value="H.264" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="380" y="350" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-3" value="HEVC" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="440" y="350" width="50" height="30" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-5" value="Surface Pool" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="260" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-6" value="Buffer Pool" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="310" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-7" value="Image Pool" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+                    <mxGeometry x="240" y="360" width="100" height="40" as="geometry"/>
+                </mxCell>
+                <mxCell id="IlsXHJPclxPX1hFeky2A-8" value="&lt;div style=&quot;forced-color-adjust: none; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251); font-size: 12px; font-style: normal; font-variant-ligatures: normal; font-variant-caps: normal; font-weight: 400; letter-spacing: normal; orphans: 2; text-align: left; text-indent: 0px; text-transform: none; widows: 2; word-spacing: 0px; -webkit-text-stroke-width: 0px; white-space: normal; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial;&quot;&gt;&lt;ul style=&quot;forced-color-adjust: none; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Surface memory and surface ID&lt;/font&gt;&lt;/li&gt;&lt;ul style=&quot;&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface memory bind to surface ID when:&lt;/font&gt;&lt;/li&gt;&lt;ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface is created in vaMapBuffer()&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface is created in vaExportSurfaceHandle()&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface is dequeued from capture port (decode output)&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface memory unbind to surface ID (by setting ID to VA_INVALID_SURFACE) when:&lt;/font&gt;&lt;/li&gt;&lt;ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface ID is got in vaBeginPicture() of decoder as this ID could be bind to a different surface later.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;V4L2 encoder doesn&#39;t change surface memory and ID binding status - static binding&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;vaCreateSurface2() only allocate surface IDs but not really allocate surface memory&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;surface memory is allocated when first time it is used.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Surface ID and context&lt;/font&gt;&lt;/li&gt;&lt;ul style=&quot;&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;V4L2 decoder context own a surface ID when this ID is got in vaBeginPicture()&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;V4L2 decoder context free a surface ID after corresponding buffer is dequeued.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Surface Pool&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;ul style=&quot;&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Created in device&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Used by device, contexts, V4L2 ports&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;One device may have multiple surface pools&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;All the surfaces in a surface pool have same attributes: width, height, format, etc.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Buffer Pool&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;ul style=&quot;&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;All the buffers of a device is maintained in a single buffer pool.&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Used by device and contexts&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Default size 64&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Used to map context, buffer type and buffer memory (if any) to buffer ID.&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Image Pool&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;ul style=&quot;&quot;&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;span style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;All the images of a device is maintained in a single image pool&lt;/font&gt;&lt;/span&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;used by device&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Default size 64&lt;/font&gt;&lt;/li&gt;&lt;li style=&quot;forced-color-adjust: none; padding: 3px 0px; color: rgb(63, 63, 63); scrollbar-color: rgb(226, 226, 226) rgb(251, 251, 251);&quot;&gt;&lt;font face=&quot;Helvetica&quot;&gt;Used to map surface id to image id (image always uses surface&#39;s memory, so cropping from surface is not supported.)&lt;/font&gt;&lt;/li&gt;&lt;/ul&gt;&lt;/ul&gt;&lt;/div&gt;" style="text;whiteSpace=wrap;html=1;labelBackgroundColor=none;textShadow=0;labelBorderColor=none;" vertex="1" parent="1">
+                    <mxGeometry x="730" y="120" width="560" height="700" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

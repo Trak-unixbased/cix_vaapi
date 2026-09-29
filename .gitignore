@@ -1,0 +1,8 @@
+build*
+.vscode/
+*.drawio.dtmp
+CMakeFiles
+*.cmake
+**/Makefile
+CMakeCache.txt
+*.so
