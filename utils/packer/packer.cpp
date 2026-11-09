@@ -1,5 +1,5 @@
 /*
- * Copyright 2025-2026 Cix Technology Group Co., Ltd.
+ * Copyright 2025 Cix Technology Group Co., Ltd.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,22 +26,30 @@ Packer::Packer() :
 
 uint32_t Packer::AddEmulationPrevention(uint8_t *out, uint32_t out_size, uint8_t *in, uint32_t in_size)
 {
-    uint32_t i = 0;
+    // Same output as before (00 00 0x -> 00 00 03 0x for x <= 3), but the
+    // destination size is now honoured: out_size used to be ignored.
     uint32_t j = 0;
-    while (i+2 < in_size) {
-        if (in[i] == 0 && in[i + 1] == 0 &&
-            (in[i + 2] == 0x00 || in[i + 2] == 0x01 || in[i + 2] == 0x02 || in[i + 2] == 0x03)) {
-            out[j++] = in[i++];
-            out[j++] = in[i++];
+    uint32_t zeros = 0;
+
+    for (uint32_t i = 0; i < in_size; i++) {
+        uint8_t b = in[i];
+        if (zeros >= 2 && b <= 0x03) {
+            if (j >= out_size)
+                goto overflow;
             out[j++] = 0x03; // insert emulation prevention byte
-        } else {
-            out[j++] = in[i++];
+            zeros = 0;
         }
+        if (j >= out_size)
+            goto overflow;
+        out[j++] = b;
+        zeros = (b == 0) ? zeros + 1 : 0;
     }
 
-    while (i < in_size)
-        out[j++] = in[i++];
+    return j;
 
+overflow:
+    CIX_VAAPI_ERROR("AddEmulationPrevention: output buffer too small (%u bytes for %u input bytes)\n",
+        out_size, in_size);
     return j;
 }
 
@@ -58,20 +66,28 @@ uint32_t Packer::CopyBits(
     uint8_t *out, uint32_t out_size, uint32_t out_bit_offset,
     uint8_t *in, uint32_t in_size, uint32_t in_bit_offset)
 {
-    CIX_VAAPI_DEBUG("Copy bits: out_size = %d, out_bit_offset = %d, in_size = %d, in_bit_offset = %d\n",
+    CIX_VAAPI_DEBUG("Copy bits: out_size = %u, out_bit_offset = %u, in_size = %u, in_bit_offset = %u\n",
         out_size, out_bit_offset, in_size, in_bit_offset);
     //! TODO: to optimize for performance
     uint32_t dst_bit_offset = out_bit_offset & 7;
     uint32_t src_bit_offset = in_bit_offset & 7;
     uint32_t dst_byte_offset = out_bit_offset >> 3;
     uint32_t src_byte_offset = in_bit_offset >> 3;
+
+    if (src_byte_offset >= in_size)
+        return dst_byte_offset;
+    if ((uint64_t)dst_byte_offset + (in_size - src_byte_offset) + 1 > out_size) {
+        CIX_VAAPI_ERROR("CopyBits: destination too small (%u bytes)\n", out_size);
+        return 0;
+    }
+
     uint8_t *dst = out + dst_byte_offset;
     uint8_t *src = in + src_byte_offset;
     uint32_t copy_bytes = in_size - src_byte_offset;
 
     if (dst_bit_offset == src_bit_offset) {
-        uint8_t dst_mask = 0xff << (8 - dst_bit_offset);
-        uint8_t src_mask = 0xff >> src_bit_offset;
+        uint8_t dst_mask = (uint8_t)(0xff << (8 - dst_bit_offset));
+        uint8_t src_mask = (uint8_t)(0xff >> src_bit_offset);
         dst[0] = (dst[0] & dst_mask) | (src[0] & src_mask);
         copy_bytes--;
 
@@ -80,9 +96,9 @@ uint32_t Packer::CopyBits(
     } else {
         // Otherwise, need to handle the cabac_alignment_one_bit in the beginning of slice data
         // First, copy remaining bits of slice header
-        uint8_t dst_mask = 0xff << (8 - dst_bit_offset);
-        uint8_t src_mask = 0xff >> src_bit_offset;
-        uint16_t src_word = (((uint16_t)src[0] & src_mask) << 8)+ src[1];
+        uint8_t dst_mask = (uint8_t)(0xff << (8 - dst_bit_offset));
+        uint8_t src_mask = (uint8_t)(0xff >> src_bit_offset);
+        uint16_t src_word = (((uint16_t)src[0] & src_mask) << 8) + src[1];
         uint32_t copy_bits = (in_size << 3) - in_bit_offset;
         if (copy_bits <= 8 - dst_bit_offset) {
             src_word <<= src_bit_offset;
@@ -122,7 +138,8 @@ uint32_t Packer::CopyBits(
             shift_bits = (copy_bits & 7);
             if (shift_bits == 0)
                 shift_bits = 8;
-            dst[copy_bytes-1] |= 0xff >> shift_bits;
+            if (copy_bytes > 0)
+                dst[copy_bytes - 1] |= 0xff >> shift_bits;
 
             dst += copy_bytes;
         }
@@ -140,7 +157,7 @@ uint32_t Packer::CopyBitsRaw(
     uint8_t *out, uint32_t out_size, uint32_t out_bit_offset,
     uint8_t *in, uint32_t in_size, uint32_t in_bit_offset)
 {
-    CIX_VAAPI_DEBUG("Copy bits raw: out_size = %d, out_bit_offset = %d, in_size = %d, in_bit_offset = %d\n",
+    CIX_VAAPI_DEBUG("Copy bits raw: out_size = %u, out_bit_offset = %u, in_size = %u, in_bit_offset = %u\n",
         out_size, out_bit_offset, in_size, in_bit_offset);
 
     uint32_t total_in_bits = in_size << 3;

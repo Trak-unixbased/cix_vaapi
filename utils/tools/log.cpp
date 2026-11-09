@@ -16,6 +16,7 @@
 
 #include <stddef.h>
 #include <stdlib.h>
+#include <ctype.h>
 #include "log.h"
 
 int32_t log_level = LOG_LEVEL_WARNING;
@@ -23,16 +24,30 @@ std::mutex log_mutex;
 
 void SetLogLevel() {
     const char *env_log_level = getenv("CIX_VAAPI_LOG");
-    if (env_log_level != NULL) {
-        log_level = atoi(env_log_level);
-    }
+    if (env_log_level == NULL || *env_log_level == '\0')
+        return;
+
+    char *end = NULL;
+    long value = strtol(env_log_level, &end, 10);
+    if (end == env_log_level)
+        return;  // not a number, keep the default level
+
+    if (value < LOG_LEVEL_ERROR)
+        value = LOG_LEVEL_ERROR;
+    if (value > LOG_LEVEL_DEBUG)
+        value = LOG_LEVEL_DEBUG;
+    log_level = (int32_t)value;
 }
 
-char *GetFourccString(uint32_t fourcc) {
-    static char fourcc_str[5] = {0};
-    fourcc_str[0] = (fourcc >> 0) & 0xff;
-    fourcc_str[1] = (fourcc >> 8) & 0xff;
-    fourcc_str[2] = (fourcc >> 16) & 0xff;
-    fourcc_str[3] = (fourcc >> 24) & 0xff;
-    return fourcc_str;
+const char *GetFourccString(uint32_t fourcc) {
+    static thread_local char ring[4][5];
+    static thread_local unsigned int index = 0;
+
+    char *str = ring[index++ & 3];
+    for (int i = 0; i < 4; i++) {
+        char c = (char)((fourcc >> (8 * i)) & 0xff);
+        str[i] = isprint((unsigned char)c) ? c : '.';
+    }
+    str[4] = '\0';
+    return str;
 }

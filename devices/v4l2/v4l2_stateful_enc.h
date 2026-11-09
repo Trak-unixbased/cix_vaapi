@@ -37,8 +37,8 @@ public:
     );
     ~V4l2StatefulEncoder();
 
-    virtual void CreateBuffers() override;
-    virtual void AddSurfaces(uint32_t num) override;
+    virtual int32_t CreateBuffers() override;
+    virtual int32_t AddSurfaces(uint32_t num) override;
     virtual void SetSeqParamBuffer(void *data, uint32_t size) override;
     virtual void SetPicParamBuffer(void *data, uint32_t size, VABufferID id) override;
     virtual void SetRateControl(void *data, uint32_t size) override;
@@ -50,7 +50,7 @@ public:
     virtual int32_t Submit() override;
     virtual uint32_t FindV4l2BufferIdBySurfaceId(VASurfaceID surface) override;
     virtual Surface *GetSurfaceFromV4l2BufferId(uint32_t id) override;
-    virtual bool IsEncoder() { return true; }
+    virtual bool IsEncoder() override { return true; }
     virtual VABufferID GetCodedBufferID() override;
     virtual int32_t SyncBuffer(VABufferID id) override;
     virtual int32_t SetRateControlMode(uint32_t mode) override;
@@ -69,17 +69,17 @@ private:
     int32_t SetV4l2Framerate(uint32_t fps_n, uint32_t fps_d);
     int32_t SetV4l2GopSize(uint32_t gop_size);
     int32_t SetV4l2BFrames(uint32_t b_frames);
-    uint32_t SetQPI(uint32_t qp_i);
-    uint32_t SetQPP(uint32_t qp_p);
-    uint32_t SetQPB(uint32_t qp_b);
+    int32_t SetQPI(uint32_t qp_i);
+    int32_t SetQPP(uint32_t qp_p);
+    int32_t SetQPB(uint32_t qp_b);
     int32_t CheckResolutionChange(uint32_t width, uint32_t height, uint32_t format);
+    Extractor *extractor;
     uint32_t slice_param_count;
     uint32_t sps_count;
-    bool first_slice;
-    DUMP_HANDLE frame_dump;
-    uint64_t frame_count;
     int32_t sps_id;
-    Extractor *extractor;
+    bool first_slice;
+    uint64_t frame_count;
+    DUMP_HANDLE frame_dump;
     int32_t v4l2_rc_mode;
 };
 

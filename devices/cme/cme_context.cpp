@@ -123,6 +123,7 @@ Surface* CmeContext::GetSurfaceByIdSynced(VASurfaceID surface_id, MediaDevice* d
 }
 
 VAStatus CmeContext::BeginPicture(VASurfaceID render_target, MediaDevice* device) {
+    (void)device;
     CIX_VAAPI_DEBUG("VPP BeginPicture: output_surface=%u\n", render_target);
     output_surface_id = render_target;
     pipeline_entries.clear();
@@ -135,7 +136,19 @@ VAStatus CmeContext::RenderPicture(VABufferID* buffers, int num_buffers, MediaDe
         BufferInfo* buf_info = bpool->GetBufferInfo(buffers[i]);
         if (!buf_info || !buf_info->buf || !buf_info->buf->GetPtr()) {
             CIX_VAAPI_ERROR("VPP RenderPicture: invalid buffer %u\n", buffers[i]);
+            return VA_STATUS_ERROR_INVALID_BUFFER;
+        }
+        // Filter parameter buffers used to be reinterpreted as pipeline
+        // parameters; only pipeline buffers drive the CME operations.
+        if (buf_info->type != VAProcPipelineParameterBufferType) {
+            CIX_VAAPI_DEBUG("VPP RenderPicture: ignoring buffer %u of type %d\n",
+                buffers[i], buf_info->type);
             continue;
+        }
+        if (buf_info->buf->GetSize() < sizeof(VAProcPipelineParameterBuffer)) {
+            CIX_VAAPI_ERROR("VPP RenderPicture: pipeline buffer %u is too small (%u bytes)\n",
+                buffers[i], buf_info->buf->GetSize());
+            return VA_STATUS_ERROR_INVALID_BUFFER;
         }
         CmePipelineEntry entry;
         entry.param_buf_id = buffers[i];

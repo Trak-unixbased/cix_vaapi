@@ -1,0 +1,70 @@
+Corrige la compilation et la stabilité du pilote pour Ubuntu 26.04 (Orange Pi 6 Plus)
+
+Compilation / intégration
+- packer_av1.cpp utilisait VADecPictureParameterBufferAV1Ext hors garde :
+  le projet ne compilait pas avec la libva standard (Ubuntu 26.04 = 2.23).
+- Extensions CIX de libva détectées par CMake (CIX_VA_HAS_SEQUENCE_PARAM_BUFFER,
+  CIX_VA_HAS_AV1_EXT) au lieu du test « VA_MICRO_VERSION == 1 ».
+- mvx-v4l2-controls.h absent du dépôt : en-tête de compatibilité
+  utils/tools/cix_va_compat.h (valeurs de l'UAPI MVX de CIX).
+- libcme optionnelle (CIX_VAAPI_CME=AUTO|ON|OFF) : l'édition de liens
+  échouait sans le SDK CIX ; VPP non annoncé si cme_initialize() échoue.
+- Build Release par défaut, -fvisibility=hidden (seul __vaDriverInit_* est
+  exporté), sortie directe cix_drv_video.so, règles install(), cc.cmake
+  (référencé par le README mais absent).
+- HEVC/AV1 en décodage non annoncés sans la libva CIX (SPS / frame header
+  bruts indispensables) : repli logiciel au lieu d'un blocage.
+- Encodeur exposé aussi sur VAEntrypointEncSlice (FFmpeg sans -low_power).
+
+Plantages / corruption mémoire
+- Use-after-free à vaTerminate : pools de surfaces détruits après cme_.
+- Use-after-free : surface encore liée à un buffer V4L2 détruite par
+  vaDestroySurfaces.
+- Déréférencements nuls (Initialize, GetImage, MapBuffer, Acquire/Release
+  BufferHandle, CreateContext d'entrypoint inconnu, codecs[] via operator[]).
+- Débordements : cache de slices de taille fixe (w*h), CopySlice sans
+  contrôle de place, AddEmulationPrevention ignorant out_size, ParseSPS
+  HEVC > 4 Kio, RemoveEmulationPrevention hors bornes, cix_bsw_write(35 bits).
+- Destructeurs non virtuels (Packer, Parser, Extractor) : fuites / UB.
+- v4l2_requestbuffers non initialisée (flags NON_COHERENT aléatoires).
+- mmap DMABUF à un offset non aligné, MAP_FAILED conservé comme pointeur.
+- Accès concurrents : verrou récursif global sur tous les points d'entrée DDI.
+- Copie de Port par valeur (auto port = GetCapPort()) interdite.
+
+Blocages
+- Boucles infinies : attente SOURCE_CHANGE, attente d'un buffer de sortie
+  libre (Poll() == -1 est « vrai »), Drain() sur fd fermé (POLLNVAL).
+- Poll() ne relançait pas sur EINTR.
+- EndPicture ignorait l'échec de Submit() (attente de 15 s dans SyncSurface).
+- SyncBuffer encodeur retournait avant la fin de l'encodage.
+- SyncSurface encodeur ne se terminait jamais après dequeue.
+- Redémarrage du décodeur (DEC_CMD_START) après un drain sur timeout.
+
+Comportement VA-API
+- Fonctions non implémentées : VA_STATUS_ERROR_UNIMPLEMENTED au lieu de
+  SUCCESS sans remplir les paramètres de sortie ; QuerySurfaceStatus,
+  BufferInfo et vaSyncSurface2 implémentés.
+- vaCreateConfig valide profil / entrypoint / RT format ; DestroyConfig.
+- Export DRM PRIME : FOURCC DRM correct (I420, Y800, YUY2) et mode
+  VA_EXPORT_SURFACE_SEPARATE_LAYERS (mpv, Kodi, hwmap).
+- Import de mémoire externe refusé explicitement (UNSUPPORTED_MEMORY_TYPE).
+- QueryVideoProcPipelineCaps n'efface plus les tableaux de l'appelant.
+- GetConfigAttributes : EncHEVCFeatures n'est plus laissé non initialisé ;
+  attributs d'encodage non annoncés en décodage.
+- FOURCC VA != V4L2 (I420/YU12) pour l'encodeur et CreateContext.
+- Débit encodeur : dépassement 32 bits au-delà de ~43 Mbit/s ;
+  dénominateur de framerate 0 ; ip_period 0 -> 0xffffffff B-frames.
+- PackerHEVC : last_sps_id / last_pps_id jamais initialisés ni mis à jour ;
+  pic_param non rafraîchi ; ParseSPS gère sps_max_sub_layers_minus1 > 0.
+- Pool : FetchSurface pouvait réattribuer une surface portant un ID VA.
+
+Divers
+- Logs : macros sûres (do/while), GetFourccString réentrant, localtime_r.
+- Dumps : plus d'attente active ni de fuite du nom de fichier.
+- Allocation DMA-BUF : repli linux,cma / reserved, CIX_VAAPI_DMA_HEAP,
+  message explicite en cas de droits insuffisants.
+
+Paquet Debian
+- packaging/build-deb.sh (natif ou --cross) : cix-va-driver_<ver>_arm64.deb
+  avec règle udev dma_heap, LIBVA_DRIVER_NAME=cix (environment.d,
+  profile.d), postinst/postrm, md5sums, lintian propre.

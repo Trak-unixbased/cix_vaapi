@@ -16,6 +16,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
 #include "parser_hevc.h"
 #include "parser_bsr.h"
 
@@ -26,13 +27,22 @@
 #define HEVC_SPS_BUFFER_SIZE 4096
 
 ParserHEVC::ParserHEVC() : Parser(),
+    slice_pic_parameter_set_id(-1),
     output_flag(true),
-    slice_pic_parameter_set_id(-1)
+    sps_buffer(nullptr),
+    sps_buffer_size(0)
 {
+    memset(&pic_param, 0, sizeof(pic_param));
     memset(&seq_header, 0, sizeof(SequenceHeader));
-    seq_header.data = malloc(HEVC_SPS_BUFFER_SIZE);
-    CIX_VAAPI_CHECK_RETURN(seq_header.data != nullptr,
+    sps_buffer = (uint8_t *)malloc(HEVC_SPS_BUFFER_SIZE);
+    CIX_VAAPI_CHECK_RETURN(sps_buffer != nullptr,
         "Failed to allocate memory for HEVC sequence header buffer.\n");
+    sps_buffer_size = HEVC_SPS_BUFFER_SIZE;
+}
+
+ParserHEVC::~ParserHEVC()
+{
+    free(sps_buffer);
 }
 
 void ParserHEVC::SetPictureParameter(void *data, uint32_t size)
@@ -50,7 +60,10 @@ void *ParserHEVC::ParseSPS(void *data, uint32_t size)
     CIX_VAAPI_CHECK_RETURN_NULL(data != nullptr && size > 0,
         "Invalid data buffer: data = %p, size = %d\n", data, size);
 
-    if (seq_header.data && !memcmp(seq_header.data, data, size) && seq_header.size == size)
+    // Compare the sizes first: memcmp() used to read "size" bytes from the
+    // fixed 4 KiB buffer whatever the size of the cached SPS.
+    if (seq_header.data != nullptr && seq_header.size == size &&
+        !memcmp(seq_header.data, data, size))
         return &seq_header;
 
     CixBitReader gb;
@@ -64,8 +77,9 @@ void *ParserHEVC::ParseSPS(void *data, uint32_t size)
     cix_br_skip_bits(&gb, 3); // nuh_temporal_id_plus1
 
     cix_br_skip_bits(&gb, 4); // sps_video_parameter_set_id
-    CIX_VAAPI_CHECK_RETURN_NULL(cix_br_read_u(&gb, 3) == 0,
-        "sps_max_sub_layers_minus1 > 0 is not expected.\n");
+    int max_sub_layers_minus1 = cix_br_read_u(&gb, 3);
+    CIX_VAAPI_CHECK_RETURN_NULL(max_sub_layers_minus1 < 7,
+        "Invalid sps_max_sub_layers_minus1 %d.\n", max_sub_layers_minus1);
     cix_br_skip_bits(&gb, 1); // sps_temporal_id_nesting_flag
 
     // profile_tier_level( 1, sps_max_sub_layers_minus1 )
@@ -83,6 +97,25 @@ void *ParserHEVC::ParseSPS(void *data, uint32_t size)
     cix_br_skip_bits(&gb, 1); // general_inbld_flag
     cix_br_skip_bits(&gb, 8); // general_level_idc
 
+    // Sub-layer part of profile_tier_level(): streams with temporal layers
+    // (sps_max_sub_layers_minus1 > 0) used to be rejected.
+    if (max_sub_layers_minus1 > 0) {
+        int sub_layer_profile_present[8] = {0};
+        int sub_layer_level_present[8] = {0};
+        for (int i = 0; i < max_sub_layers_minus1; i++) {
+            sub_layer_profile_present[i] = cix_br_read_flag(&gb);
+            sub_layer_level_present[i] = cix_br_read_flag(&gb);
+        }
+        for (int i = max_sub_layers_minus1; i < 8; i++)
+            cix_br_skip_bits(&gb, 2); // reserved_zero_2bits
+        for (int i = 0; i < max_sub_layers_minus1; i++) {
+            if (sub_layer_profile_present[i])
+                cix_br_skip_bits(&gb, 88); // sub_layer profile space .. inbld flag
+            if (sub_layer_level_present[i])
+                cix_br_skip_bits(&gb, 8); // sub_layer_level_idc
+        }
+    }
+
     seq_header.sps_seq_parameter_set_id = cix_eg_read_ue(&gb);
     value = cix_eg_read_ue(&gb); // chroma_format_idc
     CIX_VAAPI_CHECK_RETURN_NULL(value < 2, "Unsupported chroma_format_idc %d.\n", value);
@@ -99,18 +132,29 @@ void *ParserHEVC::ParseSPS(void *data, uint32_t size)
     }
 
     seq_header.bit_offset.bit_depth_luma_minus8 = gb.bit_index;
+    CIX_VAAPI_CHECK_RETURN_NULL((uint32_t)gb.bit_index <= size * 8,
+        "Truncated SPS (%u bytes).\n", size);
+
+    // Keep an owned copy: the previous code stored the caller's pointer when
+    // the SPS was larger than 4 KiB and then wrote the next SPS into it.
+    if (size > sps_buffer_size) {
+        uint8_t *bigger = (uint8_t *)realloc(sps_buffer, size);
+        CIX_VAAPI_CHECK_RETURN_NULL(bigger != nullptr, "Out of memory for the SPS.\n");
+        sps_buffer = bigger;
+        sps_buffer_size = size;
+    }
+    CIX_VAAPI_CHECK_RETURN_NULL(sps_buffer != nullptr, "No SPS buffer.\n");
+    memcpy(sps_buffer, data, size);
+    seq_header.data = sps_buffer;
     seq_header.size = size;
-    if (seq_header.data && size <= HEVC_SPS_BUFFER_SIZE)
-        memcpy(seq_header.data, data, size);
-    else
-        seq_header.data = data;
 
     return &seq_header;
 }
 
 int32_t ParserHEVC::GetSPSID(void *data, uint32_t size)
 {
-    ParseSPS(data, size);
+    if (ParseSPS(data, size) == nullptr)
+        return -1;
     return seq_header.sps_seq_parameter_set_id;
 }
 

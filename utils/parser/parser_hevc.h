@@ -24,7 +24,7 @@
 class ParserHEVC : public Parser {
 public:
     ParserHEVC();
-    ~ParserHEVC() {};
+    ~ParserHEVC() override;
     virtual void SetPictureParameter(void *data, uint32_t size);
     virtual void *ParseSPS(void *data, uint32_t size);
     virtual void ParseSliceHeader(void *data, uint32_t size);
@@ -38,6 +38,8 @@ private:
     SequenceHeader seq_header;
     int32_t slice_pic_parameter_set_id;
     bool output_flag;
+    uint8_t *sps_buffer;       // owned copy of the last SPS
+    uint32_t sps_buffer_size;  // capacity of sps_buffer
 };
 
 #endif  // PARSER_HEVC_H_

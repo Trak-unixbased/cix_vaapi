@@ -18,6 +18,7 @@
 #define V4L2_STATEFUL_DEVICE_H_
 
 #include <map>
+#include <string>
 #include <vector>
 #include <linux/videodev2.h>
 #include <va/va.h>
@@ -35,13 +36,18 @@ struct CodecProfile {
         profile(profile), support_dec(support_dec), support_enc(support_enc) {}
 };
 
+// All methods are called with the MediaDevice lock held (see cix_va_ddi.cpp).
 class MediaDeviceV4l2Stateful {
 public:
     explicit MediaDeviceV4l2Stateful(MediaDevice &media_device);
     ~MediaDeviceV4l2Stateful();
+    MediaDeviceV4l2Stateful(const MediaDeviceV4l2Stateful &) = delete;
+    MediaDeviceV4l2Stateful &operator=(const MediaDeviceV4l2Stateful &) = delete;
     bool Initialize();
 
     int32_t GetMaxProfiles() const { return supported_profiles.size(); }
+    // Returns 0 when the VPU reported a layout for this format, -1 otherwise
+    // (the caller then computes a software layout).
     int32_t QuerySurfaceLengthsAndStrides(
         uint32_t width, uint32_t height, uint32_t format,
         uint32_t lengths[CIX_VAAPI_MAX_PLANES],
@@ -128,6 +134,7 @@ private:
     void RemoveContextFromSurfaces(VAContextID context);
     uint32_t GetNumPlanes(uint32_t format);
     uint32_t GetRowBpp(uint32_t format, int32_t plane);
+    V4l2Stateful *GetCodec(VAContextID context) const;
 
     MediaDevice &media_device_;
     std::string dec_device;
@@ -141,7 +148,6 @@ private:
     std::vector<CodecProfile> supported_profiles;
     VACodedBufferSegment coded_buffer_segment{};
     bool initialized_;
-    std::mutex mutex;
 };
 
 #endif  // V4L2_STATEFUL_DEVICE_H_

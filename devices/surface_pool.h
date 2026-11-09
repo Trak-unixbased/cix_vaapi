@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <deque>
 #include <atomic>
 #include <map>
 #include <mutex>
@@ -29,16 +30,15 @@
 #define CIX_VAAPI_MAX_PLANES 3
 #define CIX_VAAPI_DEFAULT_BUFFER_LIST_SIZE 64
 #define CIX_VAAPI_DEFAULT_IMAGE_LIST_SIZE 64
-#define CIX_VA_BUFFER_ID_START 0
-#define CIX_VA_MAX_BUFFER_NUM (1 << 16)
+#define CIX_VA_BUFFER_ID_START 0u
+#define CIX_VA_MAX_BUFFER_NUM (1u << 16)
 #define CIX_VA_IS_BUFFER_ID(id) \
-    (id >= CIX_VA_BUFFER_ID_START && \
-     id < CIX_VA_BUFFER_ID_START + CIX_VA_MAX_BUFFER_NUM)
+    ((uint32_t)(id) - CIX_VA_BUFFER_ID_START < CIX_VA_MAX_BUFFER_NUM)
 #define CIX_VA_IMAGE_ID_START (CIX_VA_BUFFER_ID_START + CIX_VA_MAX_BUFFER_NUM)
-#define CIX_VA_MAX_IMAGE_NUM (1 << 16)
+#define CIX_VA_MAX_IMAGE_NUM (1u << 16)
 #define CIX_VA_IS_IMAGE_ID(id) \
-    (id >= CIX_VA_IMAGE_ID_START && \
-     id < CIX_VA_IMAGE_ID_START + CIX_VA_MAX_IMAGE_NUM)
+    ((uint32_t)(id) >= CIX_VA_IMAGE_ID_START && \
+     (uint32_t)(id) - CIX_VA_IMAGE_ID_START < CIX_VA_MAX_IMAGE_NUM)
 
 struct Plane {
     int32_t fd;
@@ -51,10 +51,15 @@ struct Plane {
 
 class Buffer {
 public:
+    // DMA-BUF backed buffer allocated from a dma-heap. If the requested heap
+    // cannot be used, the other usual heaps are tried (see surface_pool.cpp).
     Buffer(uint32_t size, const char *dma_heap);
-    Buffer(uint32_t size, VABufferType type = VABufferTypeMax);
-    // Buffer(int32_t fd, uint32_t offset, uint32_t size);
+    // Plain system memory buffer.
+    explicit Buffer(uint32_t size, VABufferType type = VABufferTypeMax);
     ~Buffer();
+    Buffer(const Buffer &) = delete;
+    Buffer &operator=(const Buffer &) = delete;
+
     void SetId(uint32_t id) { this->id = id; }
     uint32_t GetId() const { return id; }
     void *Map();
@@ -63,6 +68,11 @@ public:
     int GetFd() const { return fd_; }
     uint32_t GetSize() const { return size; }
     VABufferType GetType() const { return type; }
+    bool IsValid() const { return fd_ >= 0 || ptr != nullptr; }
+    bool IsDmaBuf() const { return fd_ >= 0; }
+    // Grows a system memory buffer, keeping its content. Returns false on
+    // failure or when called on a DMA-BUF.
+    bool Resize(uint32_t new_size);
     void Sync(uint64_t flags);
 
 private:
@@ -78,11 +88,15 @@ struct BufferInfo {
     VABufferID id;
     VABufferType type;
     VAContextID ctx;
+    uint32_t size;
+    uint32_t num_elements;
     Buffer *buf;
     BufferInfo(VABufferID id, VABufferType type, Buffer *buf = nullptr) :
-        id(id), type(type), buf(buf) {}
+        id(id), type(type), ctx(VA_INVALID_ID), size(0), num_elements(0), buf(buf) {}
 };
 
+// std::deque is used instead of std::vector so that growing the pool never
+// invalidates BufferInfo pointers handed out earlier.
 class BufferPool {
 public:
     BufferPool();
@@ -90,9 +104,10 @@ public:
     BufferInfo *GetFreeSlot(VABufferType type, VAContextID ctx);
     BufferInfo *GetBufferInfo(VABufferID id);
     int32_t ReleaseSlot(VABufferID id);
+    void ReleaseContext(VAContextID ctx);
 
 private:
-    std::vector<BufferInfo> buffers;
+    std::deque<BufferInfo> buffers;
     std::mutex mutex;
 };
 
@@ -100,20 +115,22 @@ struct ImageInfo {
     VAImageID id;
     uint32_t width;
     uint32_t height;
+    uint32_t format;
     VASurfaceID surface_id;
-    ImageInfo(VABufferID id, VASurfaceID surface_id = VA_INVALID_SURFACE) :
-        id(id), surface_id(surface_id) {}
+    ImageInfo(VAImageID id, VASurfaceID surface_id = VA_INVALID_SURFACE) :
+        id(id), width(0), height(0), format(0), surface_id(surface_id) {}
 };
 
 class ImagePool {
 public:
     ImagePool();
-    ~ImagePool() {};
+    ~ImagePool() {}
     ImageInfo *GetFreeSlot();
     ImageInfo *GetImageInfo(VAImageID id);
 
 private:
-    std::vector<ImageInfo> images;
+    std::deque<ImageInfo> images;
+    std::mutex mutex;
 };
 
 typedef void * SurfaceUser;
@@ -127,33 +144,36 @@ public:
     ~Surface() {
         if (cleanup_callback_)
             cleanup_callback_(this);
-        if (buf) delete buf;
-    };
+        delete buf;
+    }
+    Surface(const Surface &) = delete;
+    Surface &operator=(const Surface &) = delete;
 
     void SetId(VASurfaceID id) { this->id.store(id); }
     VASurfaceID GetId() const { return id.load(); }
     void SetInUse(bool use) { in_use = use; }
     bool IsInUse() const { return in_use; }
-    // bool IsMapped() const { return is_mapped; }
-    // void SetMapped(bool mapped) { is_mapped = mapped; }
-    // int32_t GetFds(std::vector<int32_t> &fds);
-    int32_t GetFd(int32_t plane) { return planes[plane].fd; };
+    bool IsValid() const { return buf != nullptr && buf->IsDmaBuf(); }
+    int32_t GetFd(int32_t plane) { return PlaneValid(plane) ? planes[plane].fd : -1; }
     uint32_t GetWidth() { return width; }
     uint32_t GetHeight() { return height; }
     uint32_t GetFormat() { return format; }
     uint32_t GetNumPlanes() { return planes.size(); }
-    uint32_t GetOffset(int32_t plane) { return planes[plane].offset; }
-    uint32_t GetSize(int32_t plane) { return planes[plane].size; }
-    uint32_t GetPitch(int32_t plane) { return planes[plane].pitch; }
+    uint32_t GetOffset(int32_t plane) { return PlaneValid(plane) ? planes[plane].offset : 0; }
+    uint32_t GetSize(int32_t plane) { return PlaneValid(plane) ? planes[plane].size : 0; }
+    uint32_t GetPitch(int32_t plane) { return PlaneValid(plane) ? planes[plane].pitch : 0; }
     Buffer *GetBuffer() { return buf; }
     void AddUser(SurfaceUser user) { users.push_back(user); }
     void RemoveUser(SurfaceUser user);
     bool HasUser() { return !users.empty(); }
-    void SyncForReadStart();
-    void SyncForReadEnd();
+    // CPU access bracketing for the DMA-BUF (read and write: the client may
+    // fill an encoder input surface through vaDeriveImage + vaMapBuffer).
+    void SyncCpuAccessStart();
+    void SyncCpuAccessEnd();
     void SetCleanupCallback(std::function<void(Surface*)> cb) { cleanup_callback_ = cb; }
 
 private:
+    bool PlaneValid(int32_t plane) const { return plane >= 0 && (size_t)plane < planes.size(); }
     void CreateBuffer(
         std::vector<uint32_t> &lengths,
         std::vector<uint32_t> &pitches,
@@ -165,7 +185,6 @@ private:
     uint32_t format;
     std::atomic<VASurfaceID> id;
     std::atomic<bool> in_use;
-    // std::atomic<bool> is_mapped;
     std::vector<SurfaceUser> users;
     std::function<void(Surface*)> cleanup_callback_;
 };
@@ -190,20 +209,19 @@ public:
     bool Match(uint32_t width, uint32_t height) {
         return (this->width == width && this->height == height);
     }
-    // void Extend(uint32_t size) { capacity += size; };
     uint32_t GetWidth() { return width; }
     uint32_t GetHeight() { return height; }
     uint32_t GetFormat() { return format_fourcc; }
     uint32_t GetNumPlanes() { return lengths.size(); }
     uint32_t GetSize() { return buffer_size; }
-    uint32_t GetSize(int32_t plane) { return lengths[plane]; }
-    uint32_t GetPitch(int32_t plane) { return pitches[plane]; }
-    uint32_t GetOffset(int32_t plane) { return offsets[plane]; }
+    uint32_t GetSize(int32_t plane) { return PlaneValid(plane) ? lengths[plane] : 0; }
+    uint32_t GetPitch(int32_t plane) { return PlaneValid(plane) ? pitches[plane] : 0; }
+    uint32_t GetOffset(int32_t plane) { return PlaneValid(plane) ? offsets[plane] : 0; }
     void AddSurfaceID(VASurfaceID id) { info_list.emplace_back(id, VA_INVALID_ID); }
     void RemoveSurfaceID(VASurfaceID id);
     bool HasSurfaceID(VASurfaceID id);
+    // Returns nullptr when the DMA-BUF of a new surface cannot be allocated.
     Surface *FetchSurface();
-    // void ReturnSurface(Surface *surface) { surface->SetInUse(false); }
     Surface *GetSurfaceByID(VASurfaceID id);
     void SetSurfaceContext(VASurfaceID id, VAContextID ctx);
     VAContextID GetContextBySurfaceID(VASurfaceID id);
@@ -212,9 +230,11 @@ public:
     bool GetPicOutput(VASurfaceID id);
     void DestroyUnusedSurface(VASurfaceID id);
     int32_t CreateSurfaceById(VASurfaceID id);
+    bool IsEmpty() const { return info_list.empty() && surfaces.empty(); }
 
 private:
-    int32_t CreateSurface();
+    bool PlaneValid(int32_t plane) const { return plane >= 0 && (size_t)plane < lengths.size(); }
+    Surface *CreateSurface(VASurfaceID id);
     void DestroySurface(VASurfaceID id);
     std::vector<Surface *> surfaces;
     uint32_t width;

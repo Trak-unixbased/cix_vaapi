@@ -18,12 +18,35 @@
 #include "device_common.h"
 #include <va/va_backend_vpp.h>
 #include <cstring>
+#include <cstdlib>
+#include <mutex>
 #include "log.h"
+
+// Fetches the device of a driver context and serializes the call.
+// A null context or device (e.g. after a failed vaInitialize()) used to be
+// dereferenced unconditionally.
+#define CIX_DDI_GET_DEVICE(ctx) \
+    MediaDevice *device = ((ctx) != nullptr) ? \
+        static_cast<MediaDevice *>((ctx)->pDriverData) : nullptr; \
+    if (device == nullptr) \
+        return VA_STATUS_ERROR_INVALID_DISPLAY; \
+    std::lock_guard<std::recursive_mutex> device_lock_(device->GetLock())
+
+#define CIX_DDI_UNIMPLEMENTED() \
+    do { \
+        CIX_VAAPI_DEBUG("%s() is not implemented\n", __func__); \
+        return VA_STATUS_ERROR_UNIMPLEMENTED; \
+    } while (0)
 
 VAStatus CixVaInterface::Terminate(
     VADriverContextP ctx
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
+    if (ctx == nullptr)
+        return VA_STATUS_ERROR_INVALID_DISPLAY;
+    // libva guarantees that no other call is in flight during vaTerminate():
+    // the device lock must not be held while the device (and the lock) is
+    // being destroyed.
     MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
     ctx->pDriverData = nullptr;
     delete device;
@@ -37,7 +60,7 @@ VAStatus CixVaInterface::QueryConfigEntrypoints(
     int *num_entrypoints
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->QueryConfigEntrypoints(profile, entrypoints, num_entrypoints);
 }
 
@@ -47,7 +70,7 @@ VAStatus CixVaInterface::QueryConfigProfiles(
     int *num_profiles
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->QueryConfigProfiles(profile_list, num_profiles);
 }
 
@@ -59,7 +82,7 @@ VAStatus CixVaInterface::GetConfigAttributes(
     int num_attribs
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->GetConfigAttributes(profile, entrypoint, attrib_list, num_attribs);
 }
 
@@ -72,7 +95,7 @@ VAStatus CixVaInterface::CreateConfig(
     VAConfigID *config_id
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->CreateConfig(profile, entrypoint, attrib_list, num_attribs, config_id);
 }
 
@@ -81,7 +104,7 @@ VAStatus CixVaInterface::DestroyConfig(
     VAConfigID config_id
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DestroyConfig(config_id);
 }
 
@@ -94,7 +117,7 @@ VAStatus CixVaInterface::QueryConfigAttributes(
     int *num_attribs
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->QueryConfigAttributes(config_id, profile, entrypoint, attrib_list, num_attribs);
 }
 
@@ -107,8 +130,7 @@ VAStatus CixVaInterface::CreateSurfaces(
     VASurfaceID *surfaces
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-
+    CIX_DDI_GET_DEVICE(ctx);
     return device->CreateSurfaces(width, height, format, num_surfaces, surfaces);
 }
 
@@ -118,7 +140,7 @@ VAStatus CixVaInterface::DestroySurfaces(
     int num_surfaces
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DestroySurfaces(surface_list, num_surfaces);
 }
 
@@ -133,8 +155,9 @@ VAStatus CixVaInterface::CreateSurfaces2(
     unsigned int num_attribs
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    return device->CreateSurfaces2(width, height, format, num_surfaces, surfaces, attrib_list, num_attribs);
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->CreateSurfaces2(width, height, format, num_surfaces, surfaces,
+        attrib_list, num_attribs);
 }
 
 VAStatus CixVaInterface::CreateContext(
@@ -148,8 +171,7 @@ VAStatus CixVaInterface::CreateContext(
     VAContextID *context
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->CreateContext(config_id, picture_width, picture_height,
         flag, render_targets, num_render_targets, context);
 }
@@ -159,7 +181,7 @@ VAStatus CixVaInterface::DestroyContext(
     VAContextID context
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DestroyContext(context);
 }
 
@@ -172,14 +194,11 @@ VAStatus CixVaInterface::CreateBuffer(
     void *data,
     VABufferID *buf_id
 ) {
-    // CIX_VAAPI_ENTER_FUNCTION;
     if (size == 0 || num_elements == 0 || buf_id == nullptr)
         return VA_STATUS_ERROR_INVALID_PARAMETER;
 
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    VAStatus ret = device->CreateBuffer(context, type, size, num_elements, data, buf_id);
-    // CIX_VAAPI_INFO("Create buffer %d\n", buf_id[0]);
-    return ret;
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->CreateBuffer(context, type, size, num_elements, data, buf_id);
 }
 
 VAStatus CixVaInterface::BufferSetNumElements(
@@ -187,9 +206,12 @@ VAStatus CixVaInterface::BufferSetNumElements(
     VABufferID buf_id,
     unsigned int num_elements
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)buf_id;
+    (void)num_elements;
+    CIX_DDI_GET_DEVICE(ctx);
+    (void)device;
+    // Buffer content is consumed when the buffer is created.
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::MapBuffer(
@@ -198,7 +220,7 @@ VAStatus CixVaInterface::MapBuffer(
     void **pbuf
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->MapBuffer(buf_id, pbuf);
 }
 
@@ -207,7 +229,7 @@ VAStatus CixVaInterface::UnmapBuffer(
     VABufferID buf_id
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->UnmapBuffer(buf_id);
 }
 
@@ -215,9 +237,7 @@ VAStatus CixVaInterface::DestroyBuffer(
     VADriverContextP ctx,
     VABufferID buf_id
 ) {
-    // CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    // CIX_VAAPI_INFO("Destroy buffer %d\n", buf_id);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DestroyBuffer(buf_id);
 }
 
@@ -227,7 +247,7 @@ VAStatus CixVaInterface::BeginPicture(
     VASurfaceID render_target
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->BeginPicture(context, render_target);
 }
 
@@ -237,10 +257,10 @@ VAStatus CixVaInterface::RenderPicture(
     VABufferID *buffers,
     int num_buffers
 ) {
-    if (buffers == nullptr || num_buffers == 0)
+    if (buffers == nullptr || num_buffers <= 0)
         return VA_STATUS_ERROR_INVALID_PARAMETER;
 
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->RenderPicture(context, buffers, num_buffers);
 }
 
@@ -248,7 +268,7 @@ VAStatus CixVaInterface::EndPicture(
     VADriverContextP ctx,
     VAContextID context
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->EndPicture(context);
 }
 
@@ -256,20 +276,31 @@ VAStatus CixVaInterface::SyncSurface(
     VADriverContextP ctx,
     VASurfaceID render_target
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->SyncSurface(render_target);
 }
 
 #if VA_CHECK_VERSION(1, 9, 0)
+static VAStatus CixVaSyncSurface2(
+    VADriverContextP ctx,
+    VASurfaceID surface,
+    uint64_t timeout_ns
+) {
+    (void)timeout_ns;  // the V4L2 backend uses its own bounded poll loop
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->SyncSurface(surface);
+}
+
 VAStatus CixVaInterface::SyncBuffer(
     VADriverContextP ctx,
     VABufferID buf_id,
     uint64_t timeout_ns
 ) {
+    (void)timeout_ns;
     if (buf_id == VA_INVALID_ID)
         return VA_STATUS_SUCCESS;
 
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->SyncBuffer(buf_id);
 }
 #endif
@@ -279,9 +310,8 @@ VAStatus CixVaInterface::QuerySurfaceStatus(
     VASurfaceID render_target,
     VASurfaceStatus *status
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->QuerySurfaceStatus(render_target, status);
 }
 
 VAStatus CixVaInterface::QuerySurfaceError(
@@ -290,9 +320,13 @@ VAStatus CixVaInterface::QuerySurfaceError(
     VAStatus error_status,
     void **error_info
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)render_target;
+    (void)error_status;
+    CIX_DDI_GET_DEVICE(ctx);
+    (void)device;
+    if (error_info)
+        *error_info = nullptr;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::QuerySurfaceAttributes(
@@ -302,11 +336,10 @@ VAStatus CixVaInterface::QuerySurfaceAttributes(
     unsigned int *num_attribs
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-
     if (num_attribs == nullptr)
         return VA_STATUS_ERROR_INVALID_PARAMETER;
 
+    CIX_DDI_GET_DEVICE(ctx);
     return device->QuerySurfaceAttributes(config_id, attrib_list, num_attribs);
 }
 
@@ -321,6 +354,8 @@ VAStatus CixVaInterface::QueryVideoProcFilters(
     (void)ctx;
     (void)context;
     (void)filters;
+    if (num_filters == nullptr)
+        return VA_STATUS_ERROR_INVALID_PARAMETER;
     *num_filters = 0;
     return VA_STATUS_SUCCESS;
 }
@@ -337,6 +372,8 @@ VAStatus CixVaInterface::QueryVideoProcFilterCaps(
     (void)context;
     (void)type;
     (void)filter_caps;
+    if (num_filter_caps == nullptr)
+        return VA_STATUS_ERROR_INVALID_PARAMETER;
     *num_filter_caps = 0;
     return VA_STATUS_SUCCESS;
 }
@@ -358,9 +395,33 @@ VAStatus CixVaInterface::QueryVideoProcPipelineCaps(
         return VA_STATUS_ERROR_INVALID_PARAMETER;
     }
 
-    // Zero-init entire struct to prevent caller from reading uninitialized fields
-    // (especially input/output_color_standards pointers and counts)
+    // The caller owns input/output_color_standards (array pointers + counts):
+    // keep them and only report the number of supported standards, instead of
+    // wiping the pointers with memset (which made the caller lose them).
+    VAProcColorStandardType *in_standards = pipeline_caps->input_color_standards;
+    VAProcColorStandardType *out_standards = pipeline_caps->output_color_standards;
+    uint32_t in_capacity = pipeline_caps->num_input_color_standards;
+    uint32_t out_capacity = pipeline_caps->num_output_color_standards;
+
     memset(pipeline_caps, 0, sizeof(VAProcPipelineCaps));
+
+    static const VAProcColorStandardType standards[] = {
+        VAProcColorStandardBT601, VAProcColorStandardBT709, VAProcColorStandardBT2020,
+    };
+    const uint32_t num_standards = sizeof(standards) / sizeof(standards[0]);
+
+    pipeline_caps->input_color_standards = in_standards;
+    pipeline_caps->output_color_standards = out_standards;
+    if (in_standards) {
+        for (uint32_t i = 0; i < num_standards && i < in_capacity; i++)
+            in_standards[i] = standards[i];
+    }
+    if (out_standards) {
+        for (uint32_t i = 0; i < num_standards && i < out_capacity; i++)
+            out_standards[i] = standards[i];
+    }
+    pipeline_caps->num_input_color_standards = num_standards;
+    pipeline_caps->num_output_color_standards = num_standards;
 
     pipeline_caps->pipeline_flags = 0;
     pipeline_caps->filter_flags = 0;
@@ -377,6 +438,8 @@ VAStatus CixVaInterface::QueryVideoProcPipelineCaps(
     pipeline_caps->min_input_height = 64;
     pipeline_caps->max_output_width = 8192;
     pipeline_caps->max_output_height = 8192;
+    pipeline_caps->min_output_width = 64;
+    pipeline_caps->min_output_height = 64;
     return VA_STATUS_SUCCESS;
 }
 
@@ -386,7 +449,7 @@ VAStatus CixVaInterface::QueryImageFormats(
     int *num_formats
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->QueryImageFormats(format_list, num_formats);
 }
 
@@ -397,7 +460,7 @@ VAStatus CixVaInterface::CreateImage(
     int height,
     VAImage *image
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->CreateImage(format, width, height, image);
 }
 
@@ -407,7 +470,7 @@ VAStatus CixVaInterface::DeriveImage(
     VAImage *image
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DeriveImage(surface, image);
 }
 
@@ -416,7 +479,7 @@ VAStatus CixVaInterface::DestroyImage(
     VAImageID image
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->DestroyImage(image);
 }
 
@@ -429,7 +492,7 @@ VAStatus CixVaInterface::GetImage(
     unsigned int height,
     VAImageID image
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->GetImage(surface, x, y, width, height, image);
 }
 
@@ -440,9 +503,8 @@ VAStatus CixVaInterface::BufferInfo(
     unsigned int *size,
     unsigned int *num_elements
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->QueryBufferInfo(buf_id, type, size, num_elements);
 }
 
 VAStatus CixVaInterface::AcquireBufferHandle(
@@ -451,7 +513,7 @@ VAStatus CixVaInterface::AcquireBufferHandle(
     VABufferInfo *buf_info
 ) {
     CIX_VAAPI_ENTER_FUNCTION;
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->AcquireBufferHandle(buf_id, buf_info);
 }
 
@@ -459,9 +521,9 @@ VAStatus CixVaInterface::ReleaseBufferHandle(
     VADriverContextP ctx,
     VABufferID buf_id
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    CIX_VAAPI_ENTER_FUNCTION;
+    CIX_DDI_GET_DEVICE(ctx);
+    return device->ReleaseBufferHandle(buf_id);
 }
 
 VAStatus CixVaInterface::ExportSurfaceHandle(
@@ -471,9 +533,13 @@ VAStatus CixVaInterface::ExportSurfaceHandle(
     uint32_t flags,
     void *descriptor
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
+    CIX_DDI_GET_DEVICE(ctx);
     return device->ExportSurfaceHandle(surface, mem_type, flags, descriptor);
 }
+
+// The functions below are not supported by this DRM-only driver. They used to
+// return VA_STATUS_SUCCESS without touching their output parameters, so
+// callers read uninitialized values or believed an operation had happened.
 
 VAStatus CixVaInterface::PutSurface(
     VADriverContextP ctx,
@@ -491,9 +557,10 @@ VAStatus CixVaInterface::PutSurface(
     uint32_t number_cliprects,
     uint32_t flags
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)surface; (void)draw; (void)src_x; (void)src_y; (void)src_w;
+    (void)src_h; (void)dest_x; (void)dest_y; (void)dest_w; (void)dest_h;
+    (void)cliprects; (void)number_cliprects; (void)flags;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::SetImagePalette(
@@ -501,9 +568,8 @@ VAStatus CixVaInterface::SetImagePalette(
     VAImageID image,
     unsigned char* palette
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)image; (void)palette;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::PutImage(
@@ -519,9 +585,10 @@ VAStatus CixVaInterface::PutImage(
     unsigned int dest_width,
     unsigned int dest_height
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)surface; (void)image; (void)src_x; (void)src_y; (void)src_width;
+    (void)src_height; (void)dest_x; (void)dest_y; (void)dest_width; (void)dest_height;
+    // Clients fall back to vaDeriveImage() + vaMapBuffer() (FFmpeg, GStreamer).
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::QuerySubpictureFormats(
@@ -530,8 +597,12 @@ VAStatus CixVaInterface::QuerySubpictureFormats(
     unsigned int* flags,
     unsigned int* num_formats
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
+    (void)ctx;
+    (void)format_list;
+    (void)flags;
+    if (num_formats == nullptr)
+        return VA_STATUS_ERROR_INVALID_PARAMETER;
+    *num_formats = 0;
     return VA_STATUS_SUCCESS;
 }
 
@@ -540,18 +611,18 @@ VAStatus CixVaInterface::CreateSubpicture(
     VAImageID image,
     VASubpictureID* subpicture
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)image;
+    if (subpicture)
+        *subpicture = VA_INVALID_ID;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::DestroySubpicture(
     VADriverContextP ctx,
     VASubpictureID subpicture
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::SetSubpictureImage(
@@ -559,9 +630,8 @@ VAStatus CixVaInterface::SetSubpictureImage(
     VASubpictureID subpicture,
     VAImageID image
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture; (void)image;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::SetSubpictureChromakey(
@@ -571,9 +641,8 @@ VAStatus CixVaInterface::SetSubpictureChromakey(
     unsigned int chromakey_max,
     unsigned int chromakey_mask
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture; (void)chromakey_min; (void)chromakey_max; (void)chromakey_mask;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::SetSubpictureGlobalAlpha(
@@ -581,9 +650,8 @@ VAStatus CixVaInterface::SetSubpictureGlobalAlpha(
     VASubpictureID subpicture,
     float global_alpha
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture; (void)global_alpha;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::AssociateSubpicture(
@@ -601,9 +669,10 @@ VAStatus CixVaInterface::AssociateSubpicture(
     unsigned short desth,
     unsigned int flags
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture; (void)target_surfaces; (void)num_surfaces; (void)srcx;
+    (void)srcy; (void)srcw; (void)srch; (void)destx; (void)desty; (void)destw; (void)desth;
+    (void)flags;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::DeassociateSubpicture(
@@ -612,9 +681,8 @@ VAStatus CixVaInterface::DeassociateSubpicture(
     VASurfaceID* target_surfaces,
     int num_surfaces
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)subpicture; (void)target_surfaces; (void)num_surfaces;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::QueryDisplayAttributes(
@@ -622,8 +690,11 @@ VAStatus CixVaInterface::QueryDisplayAttributes(
     VADisplayAttribute* attr_list,
     int* num_attributes
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
+    (void)ctx;
+    (void)attr_list;
+    if (num_attributes == nullptr)
+        return VA_STATUS_ERROR_INVALID_PARAMETER;
+    *num_attributes = 0;
     return VA_STATUS_SUCCESS;
 }
 
@@ -632,9 +703,8 @@ VAStatus CixVaInterface::GetDisplayAttributes(
     VADisplayAttribute* attr_list,
     int num_attributes
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)attr_list; (void)num_attributes;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::SetDisplayAttributes(
@@ -642,15 +712,16 @@ VAStatus CixVaInterface::SetDisplayAttributes(
     VADisplayAttribute* attr_list,
     int num_attributes
 ) {
-    MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
-    CIX_VAAPI_WARNING("%s() is not implemented!\n", __func__);
-    return VA_STATUS_SUCCESS;
+    (void)ctx; (void)attr_list; (void)num_attributes;
+    CIX_DDI_UNIMPLEMENTED();
 }
 
 VAStatus CixVaInterface::LoadFunction(VADriverContextP ctx)
 {
     MediaDevice *device = static_cast<MediaDevice *>(ctx->pDriverData);
     struct VADriverVTable *pVTable = ctx->vtable;
+    if (device == nullptr || pVTable == nullptr)
+        return VA_STATUS_ERROR_INVALID_CONTEXT;
 
     ctx->version_major                       = VA_MAJOR_VERSION;
     ctx->version_minor                       = VA_MINOR_VERSION;
@@ -689,7 +760,7 @@ VAStatus CixVaInterface::LoadFunction(VADriverContextP ctx)
     pVTable->vaEndPicture                    = CixVaInterface::EndPicture;
     pVTable->vaSyncSurface                   = CixVaInterface::SyncSurface;
 #if VA_CHECK_VERSION(1, 9, 0)
-    pVTable->vaSyncSurface2                  = nullptr;
+    pVTable->vaSyncSurface2                  = CixVaSyncSurface2;
     pVTable->vaSyncBuffer                    = CixVaInterface::SyncBuffer;
 #endif
     pVTable->vaQuerySurfaceStatus            = CixVaInterface::QuerySurfaceStatus;
@@ -730,7 +801,7 @@ VAStatus CixVaInterface::LoadFunction(VADriverContextP ctx)
     pVTable->vaReleaseBufferHandle           = CixVaInterface::ReleaseBufferHandle;
     pVTable->vaExportSurfaceHandle           = CixVaInterface::ExportSurfaceHandle;
 
-    // VPP vtable
+    // VPP vtable (allocated by libva; only allocate it ourselves as a fallback)
     if (ctx->vtable_vpp == nullptr) {
         ctx->vtable_vpp = (VADriverVTableVPP *)calloc(1, sizeof(VADriverVTableVPP));
         if (ctx->vtable_vpp)
@@ -747,10 +818,15 @@ VAStatus CixVaInterface::LoadFunction(VADriverContextP ctx)
 
 VAStatus CixVaInterface::Initialize(VADriverContextP ctx)
 {
-    VAStatus status = VA_STATUS_SUCCESS;
-    int32_t fd = 0;
+    if (ctx == nullptr || ctx->vtable == nullptr)
+        return VA_STATUS_ERROR_INVALID_DISPLAY;
 
     MediaDevice *device = MediaDevice::CreateDevice();
+    if (device == nullptr) {
+        CIX_VAAPI_ERROR("Failed to initialize the CIX VA-API driver "
+            "(is the user in the 'video' and 'render' groups?)\n");
+        return VA_STATUS_ERROR_OPERATION_FAILED;
+    }
     ctx->pDriverData = device;
 
     if (CixVaInterface::LoadFunction(ctx) != VA_STATUS_SUCCESS) {
@@ -779,4 +855,3 @@ MMAPI_EXPORT VAStatus VA_DRV_INIT_FUNC_NAME(VADriverContextP ctx)
 #ifdef __cplusplus
 }
 #endif
-

@@ -19,8 +19,23 @@
 
 #include <map>
 #include <vector>
+#include <mutex>
 #include <va/va.h>
+#include "surface_pool.h"
+
+// CIX_VAAPI_HAVE_CME is set by CMake when libcme (CIX 2D engine, used for
+// VA-API video processing) is available. Without it the VPP entrypoint is
+// simply not exposed and the driver still provides decode / encode.
+#ifndef CIX_VAAPI_HAVE_CME
+#define CIX_VAAPI_HAVE_CME 0
+#endif
+
+#if CIX_VAAPI_HAVE_CME
 #include "cme_context.h"
+#else
+struct cme_img;
+class CmeContext;
+#endif
 
 class MediaDevice;
 struct DeviceConfig;
@@ -29,10 +44,14 @@ class MediaDeviceCme {
 public:
     explicit MediaDeviceCme(MediaDevice &media_device);
     ~MediaDeviceCme();
+    MediaDeviceCme(const MediaDeviceCme &) = delete;
+    MediaDeviceCme &operator=(const MediaDeviceCme &) = delete;
+
+    // Returns false when libcme is missing or failed to initialize.
     bool Initialize();
+    bool IsAvailable() const { return available_; }
     // CME VPP supports exactly one VA profile: VAProfileNone.
-    static constexpr int32_t kCmeProfileCount = 1;
-    int32_t GetMaxProfiles() const { return kCmeProfileCount; }
+    int32_t GetMaxProfiles() const { return available_ ? 1 : 0; }
 
     // ====== Config management (parallel to V4l2Stateful) ======
     VAStatus QueryConfigProfiles(
@@ -93,10 +112,6 @@ public:
 
     // ====== Helper methods ======
     int32_t GetMaxImageFormats() const;
-    int32_t QuerySurfaceLengthsAndStrides(
-        uint32_t width, uint32_t height, uint32_t format,
-        uint32_t lengths[CIX_VAAPI_MAX_PLANES],
-        uint32_t strides[CIX_VAAPI_MAX_PLANES]);
 
     // ====== CME image lifecycle ======
     cme_img* LookupCmeImg(Buffer* buf);
@@ -116,6 +131,7 @@ private:
     std::map<Buffer*, cme_img*> img_map_;
     std::mutex img_map_mutex_;
     bool initialized_;
+    bool available_;
 };
 
 #endif  // CME_DEVICE_H_

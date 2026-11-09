@@ -29,16 +29,17 @@
 class Extractor {
 public:
     Extractor();
-    ~Extractor() {};
+    // Virtual: extractors are deleted through an Extractor pointer.
+    virtual ~Extractor() {}
 
-    virtual void SetSequenceParameter(void *data, uint32_t size) {};
+    virtual void SetSequenceParameter(void *data, uint32_t size) { (void)data; (void)size; }
     virtual void SetPictureParameter(void *data, uint32_t size) = 0;
     virtual void SetSliceParameter(void *data, uint32_t size) = 0;
     virtual uint32_t GetCodedBufferID() = 0;
     virtual uint32_t GetBitrate() { return 0; }
     virtual uint32_t GetFrameRateDenominator() { return 1; }
     virtual uint32_t GetFrameRateNumerator() { return 30; }
-    virtual uint32_t GetGopSize() { return -1; }
+    virtual uint32_t GetGopSize() { return (uint32_t)-1; }
     virtual uint32_t GetBFrames() { return 0; }
     virtual uint32_t GetQP() { return 26; }
     virtual uint32_t GetCodingType() { return CODING_TYPE_I; }

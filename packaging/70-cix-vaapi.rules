@@ -1,0 +1,9 @@
+# CIX VA-API driver (cix_drv_video.so)
+#
+# Surfaces are allocated from the DMA-BUF heaps. On many distributions
+# /dev/dma_heap/* is root-only (0600), so VA-API applications failed with
+# "Failed to allocate ... DMA-BUF". Give access to the "video" group and to
+# the user logged in on the local seat (uaccess).
+SUBSYSTEM=="dma_heap", KERNEL=="system", GROUP="video", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="dma_heap", KERNEL=="linux,cma", GROUP="video", MODE="0660", TAG+="uaccess"
+SUBSYSTEM=="dma_heap", KERNEL=="reserved", GROUP="video", MODE="0660", TAG+="uaccess"

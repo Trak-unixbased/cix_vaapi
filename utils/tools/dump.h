@@ -17,6 +17,8 @@
 #ifndef DUMP_H_
 #define DUMP_H_
 
+#include <stddef.h>
+
 typedef void *DUMP_HANDLE;
 
 DUMP_HANDLE DUMP_OpenBitsFile();

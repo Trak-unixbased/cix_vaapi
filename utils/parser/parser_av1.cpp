@@ -15,6 +15,7 @@
  */
 
 #include <cstring>
+#include "cix_va_compat.h"
 #include "parser_av1.h"
 
 ParserAV1::ParserAV1() : pic_valid(false)
@@ -61,7 +62,7 @@ void *ParserAV1::ParseSPS(void *data, uint32_t size)
 const void *ParserAV1::GetPpsBuffer(uint32_t &size)
 {
     size = 0;
-#if (VA_MAJOR_VERSION == 1 && VA_MINOR_VERSION == 22 && VA_MICRO_VERSION == 1)
+#if CIX_VA_HAS_AV1_EXT
     if (!pic_valid)
         return nullptr;
     const VADecPictureParameterBufferAV1Ext *ext =
@@ -75,7 +76,7 @@ const void *ParserAV1::GetPpsBuffer(uint32_t &size)
     return (const void *)ext->u.buffer.buffer_address;
 #else
     return nullptr;
-#endif  // (VA_MAJOR_VERSION == 1 && VA_MINOR_VERSION == 22 && VA_MICRO_VERSION == 1)
+#endif  // CIX_VA_HAS_AV1_EXT
 }
 
 void ParserAV1::ParseSliceHeader(void *data, uint32_t size)

@@ -21,7 +21,8 @@ uint32_t Parser::RemoveEmulationPrevention(uint8_t *data, uint32_t size)
     uint32_t i = 0;
     uint32_t j = 0;
     while (i < size) {
-        if (data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0x03) {
+        // Bounds checked: data[i + 1] / data[i + 2] used to be read past the end.
+        if (i + 2 < size && data[i] == 0 && data[i + 1] == 0 && data[i + 2] == 0x03) {
             data[j++] = data[i++];
             data[j++] = data[i++];
             i++; // skip emulation prevention byte 0x03

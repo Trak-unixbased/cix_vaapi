@@ -126,8 +126,8 @@ void PackerH264::SetSliceParameter(void *data, uint32_t size)
     if (num == 0 || size % sizeof(VASliceParameterBufferH264) != 0)
         return;
 
-        VASliceParameterBufferH264 *slice_param = (VASliceParameterBufferH264 *)data;
-    for (int i = 0; i < num; i++) {
+    VASliceParameterBufferH264 *slice_param = (VASliceParameterBufferH264 *)data;
+    for (uint32_t i = 0; i < num; i++) {
         slice_params.emplace_back(slice_param[i]);
         CIX_VAAPI_INFO("Got slice parameter: slice_data_size = %d, slice_data_offset = %d, slice_data_bit_offset = %d\n",
             slice_param[i].slice_data_size, slice_param[i].slice_data_offset, slice_param[i].slice_data_bit_offset);
@@ -138,6 +138,10 @@ void PackerH264::PackSpsNalu(void *out, uint32_t out_size, uint32_t &offset)
 {
     if (!update_sps)
         return;
+    if (!HasRoom(out_size, offset)) {
+        CIX_VAAPI_ERROR("No room for the SPS in the bitstream buffer\n");
+        return;
+    }
 
     void *cache;
     uint32_t cache_size;
@@ -155,8 +159,13 @@ void PackerH264::PackSpsNalu(void *out, uint32_t out_size, uint32_t &offset)
 
 void PackerH264::PackPpsNalu(void *out, uint32_t out_size, uint32_t &offset, int32_t sps_id, int32_t pps_id)
 {
+    (void)sps_id;
     if (!update_pps)
         return;
+    if (!HasRoom(out_size, offset)) {
+        CIX_VAAPI_ERROR("No room for the PPS in the bitstream buffer\n");
+        return;
+    }
 
     void *cache;
     uint32_t cache_size;
@@ -174,9 +183,10 @@ void PackerH264::PackPpsNalu(void *out, uint32_t out_size, uint32_t &offset, int
 
 void PackerH264::PackSliceNalu(void *out, uint32_t out_size, uint32_t &offset, void *in, uint32_t in_size, void *slice_header)
 {
-    H264SliceHeader *param = (H264SliceHeader *)slice_header;
     void *cache;
     uint32_t cache_size;
+    if (slice_params.empty() || in_size == 0 || !HasRoom(out_size, offset))
+        return;
     offset += AddStartCode((uint8_t *)out + offset);
     ((uint8_t *)out)[offset++] = ((uint8_t *)in)[0]; // NALU header
 
@@ -194,11 +204,21 @@ void PackerH264::PackSliceNalu(void *out, uint32_t out_size, uint32_t &offset, v
 
 void PackerH264::PackFrame(void *in, uint32_t in_size, void *out, uint32_t out_size)
 {
+    (void)in;
+    (void)in_size;
+    (void)out;
+    (void)out_size;
 }
 
 uint32_t PackerH264::CopySlice(void *out, uint32_t out_size, void *in, uint32_t in_size, bool first_slice)
 {
     uint32_t offset = 0;
+    // The slice used to be copied without checking the space left in the
+    // V4L2 bitstream buffer (heap overflow on large intra frames).
+    if (out == nullptr || in == nullptr || (uint64_t)in_size + 4 > out_size) {
+        CIX_VAAPI_ERROR("Slice of %u bytes does not fit in %u bytes\n", in_size, out_size);
+        return 0;
+    }
     offset += AddStartCode((uint8_t *)out, !first_slice);
     memcpy((uint8_t *)out + offset, in, in_size);
     offset += in_size;
@@ -222,7 +242,6 @@ uint32_t PackerH264::AddStartCode(uint8_t *buf, bool short_start_code)
 
 uint32_t PackerH264::AddNaluHeader(uint8_t *buf, uint8_t type)
 {
-    cix_bsw_ctx *s = &p;
     uint8_t ref_idc = type == H264_NALU_TYPE_SPS || type == H264_NALU_TYPE_PPS ?
         3 : pic_param.pic_fields.bits.reference_pic_flag;
 
@@ -312,16 +331,22 @@ void PackerH264::PackPPS(int32_t sps_id, int32_t pps_id)
 {
     cix_bsw_ctx *s = &p;
     int qp_bd_offset = 6 * pic_param.bit_depth_luma_minus8;
+    // slice_params can be empty if the client renders the slice data before
+    // its parameters: indexing [0] was undefined behaviour.
+    uint32_t num_ref_idx_l0_active_minus1 =
+        slice_params.empty() ? 0 : slice_params[0].num_ref_idx_l0_active_minus1;
+    uint32_t num_ref_idx_l1_active_minus1 =
+        slice_params.empty() ? 0 : slice_params[0].num_ref_idx_l1_active_minus1;
 
-
+    (void)sps_id;
     cix_bsw_put_ue(s, pps_id); // pic_parameter_set_id, // TODO: should be from slice header
     cix_bsw_put_ue(s, 0); // seq_parameter_set_id, always use 0 as it's up to date
     cix_bsw_write_bit(s, pic_param.pic_fields.bits.entropy_coding_mode_flag);
     cix_bsw_write_bit(s, pic_param.pic_fields.bits.pic_order_present_flag); // bottom_field_pic_order_in_frame_present_flag
     cix_bsw_put_ue(s, 0); // num_slice_groups_minus1
     // Skip FMO related fields as it's not supported
-    cix_bsw_put_ue(s, slice_params[0].num_ref_idx_l0_active_minus1);
-    cix_bsw_put_ue(s, slice_params[0].num_ref_idx_l1_active_minus1);
+    cix_bsw_put_ue(s, num_ref_idx_l0_active_minus1);
+    cix_bsw_put_ue(s, num_ref_idx_l1_active_minus1);
     cix_bsw_write_bit(s, pic_param.pic_fields.bits.weighted_pred_flag);
     cix_bsw_write(s, 2, pic_param.pic_fields.bits.weighted_bipred_idc);
     cix_bsw_write_se(s, pic_param.pic_init_qp_minus26 - qp_bd_offset);
@@ -349,6 +374,8 @@ void PackerH264::PackPPS(int32_t sps_id, int32_t pps_id)
 void PackerH264::PackSliceHeader()
 {
     cix_bsw_ctx *s = &p;
+    if (slice_params.empty())
+        return;
     auto slice_param = slice_params[0];
 
     cix_bsw_put_ue(s, slice_param.first_mb_in_slice);
@@ -458,6 +485,8 @@ uint32_t PackerH264::PackSliceHeaderPartial(H264SliceHeader *header, uint8_t nal
 {
     cix_bsw_ctx *s = &p;
     uint32_t bits = 0;
+    if (slice_params.empty())
+        return 0;
     auto slice_param = slice_params[0];
 
     cix_bsw_put_ue(s, header->first_mb_in_slice);
@@ -510,6 +539,8 @@ uint32_t PackerH264::CopySliceData(
     CIX_VAAPI_DEBUG("Copy slice data: out_size = %d, out_bit_offset = %d, in_size = %d, in_bit_offset = %d\n",
         out_size, out_bit_offset, in_size, in_bit_offset);
     //! TODO: to optimize for performance
+    if (slice_params.empty() || (in_bit_offset >> 3) >= in_size)
+        return 0;
     auto slice_param = slice_params[0];
     uint32_t dst_bit_offset = out_bit_offset & 7;
     uint32_t src_bit_offset = in_bit_offset & 7;

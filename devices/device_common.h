@@ -23,6 +23,7 @@
 #include <map>
 #include <memory>
 #include <va/va_backend.h>
+#include "cix_va_compat.h"
 #include "surface_pool.h"
 #include "log.h"
 #include "dump.h"
@@ -33,48 +34,54 @@
 
 #define INVALID_BUFFER_ID VA_INVALID_ID
 #define CIX_VAAPI_VENDOR_STR "CIX media driver"
+// VLD + EncSlice + EncSliceLP, or VideoProc
 #define CIX_VAAPI_MAX_ENTRYPOINTS 3
 #define CIX_VAAPI_MAX_SUBPIC_FORMATS 4
 #define CIX_VAAPI_MAX_DISPLAY_ATTRIBUTES 0
 
 #if VA_CHECK_VERSION(1, 18, 0)
 #define IS_H264_PROFILE(profile) \
-    (profile == VAProfileH264Main || profile == VAProfileH264High || \
-     profile == VAProfileH264ConstrainedBaseline || profile == VAProfileH264High10)
+    ((profile) == VAProfileH264Main || (profile) == VAProfileH264High || \
+     (profile) == VAProfileH264ConstrainedBaseline || (profile) == VAProfileH264High10)
 #else
 #define IS_H264_PROFILE(profile) \
-    (profile == VAProfileH264Main || profile == VAProfileH264High || \
-     profile == VAProfileH264ConstrainedBaseline)
+    ((profile) == VAProfileH264Main || (profile) == VAProfileH264High || \
+     (profile) == VAProfileH264ConstrainedBaseline)
 #endif
 
 #define IS_H265_PROFILE(profile) \
-    (profile == VAProfileHEVCMain || profile == VAProfileHEVCMain10)
+    ((profile) == VAProfileHEVCMain || (profile) == VAProfileHEVCMain10)
 
 #define IS_VP9_PROFILE(profile) \
-    (profile == VAProfileVP9Profile0 || profile == VAProfileVP9Profile1 || \
-     profile == VAProfileVP9Profile2 || profile == VAProfileVP9Profile3)
+    ((profile) == VAProfileVP9Profile0 || (profile) == VAProfileVP9Profile1 || \
+     (profile) == VAProfileVP9Profile2 || (profile) == VAProfileVP9Profile3)
 
-#define IS_AV1_PROFILE(profile) (profile == VAProfileAV1Profile0)
+#define IS_AV1_PROFILE(profile) ((profile) == VAProfileAV1Profile0)
 
-#define IS_VP8_PROFILE(profile) (profile == VAProfileVP8Version0_3)
+#define IS_VP8_PROFILE(profile) ((profile) == VAProfileVP8Version0_3)
 
 #if VA_CHECK_VERSION(1, 18, 0)
 #define IS_10BIT_PROFILE(profile) \
-    (profile == VAProfileHEVCMain10 || profile == VAProfileVP9Profile2 || \
-     profile == VAProfileVP9Profile3 || profile == VAProfileH264High10 || \
-     profile == VAProfileAV1Profile0)
+    ((profile) == VAProfileHEVCMain10 || (profile) == VAProfileVP9Profile2 || \
+     (profile) == VAProfileVP9Profile3 || (profile) == VAProfileH264High10 || \
+     (profile) == VAProfileAV1Profile0)
 #else
 #define IS_10BIT_PROFILE(profile) \
-    (profile == VAProfileHEVCMain10 || profile == VAProfileVP9Profile2 || \
-     profile == VAProfileVP9Profile3)
+    ((profile) == VAProfileHEVCMain10 || (profile) == VAProfileVP9Profile2 || \
+     (profile) == VAProfileVP9Profile3)
 #endif
 
-#define IS_DECODE_ENTRYPOINT(entry_point) (entry_point == VAEntrypointVLD)
-#define IS_ENCODE_ENTRYPOINT(entry_point) (entry_point == VAEntrypointEncSliceLP)
-#define IS_VPP_ENTRYPOINT(entry_point) (entry_point == VAEntrypointVideoProc)
-#define IS_CODEC_ENTRYPOINT(entry_point) (entry_point == VAEntrypointVLD || entry_point == VAEntrypointEncSliceLP)
+#define IS_DECODE_ENTRYPOINT(entry_point) ((entry_point) == VAEntrypointVLD)
+// The stateful MVX encoder is exposed through both the regular and the
+// low-power slice entrypoints: FFmpeg (without -low_power), GStreamer
+// "vah264enc" and Chromium request VAEntrypointEncSlice.
+#define IS_ENCODE_ENTRYPOINT(entry_point) \
+    ((entry_point) == VAEntrypointEncSlice || (entry_point) == VAEntrypointEncSliceLP)
+#define IS_VPP_ENTRYPOINT(entry_point) ((entry_point) == VAEntrypointVideoProc)
+#define IS_CODEC_ENTRYPOINT(entry_point) \
+    (IS_DECODE_ENTRYPOINT(entry_point) || IS_ENCODE_ENTRYPOINT(entry_point))
 
-#define CIX_VAAPI_MAX_SURFACE_ATTRIBUTES 10
+#define CIX_VAAPI_MAX_SURFACE_ATTRIBUTES 16
 
 inline void SetSurfaceAttribInteger(VASurfaceAttrib *attrib, VASurfaceAttribType type,
                                     int value, uint32_t flags = VA_SURFACE_ATTRIB_GETTABLE)
@@ -101,8 +108,15 @@ class MediaDevice {
 public:
     MediaDevice();
     ~MediaDevice();
+    MediaDevice(const MediaDevice &) = delete;
+    MediaDevice &operator=(const MediaDevice &) = delete;
 
     static MediaDevice* CreateDevice();
+
+    // libva does not serialize calls into the driver. Every DDI entry point
+    // takes this lock so that the pools / maps below are never modified while
+    // another thread (e.g. a player render thread exporting surfaces) walks them.
+    std::recursive_mutex &GetLock() { return lock_; }
 
     int32_t GetMaxProfiles() const;
     int32_t GetMaxEntrypoints() const { return CIX_VAAPI_MAX_ENTRYPOINTS; }
@@ -194,6 +208,12 @@ public:
 
     VAStatus DestroyBuffer(VABufferID buf_id);
 
+    VAStatus QueryBufferInfo(
+        VABufferID buf_id,
+        VABufferType *type,
+        unsigned int *size,
+        unsigned int *num_elements);
+
     VAStatus MapBuffer(VABufferID buf_id, void **pbuf);
 
     VAStatus UnmapBuffer(VABufferID buf_id);
@@ -208,6 +228,8 @@ public:
     VAStatus EndPicture(VAContextID context);
 
     VAStatus SyncSurface(VASurfaceID render_target);
+
+    VAStatus QuerySurfaceStatus(VASurfaceID render_target, VASurfaceStatus *status);
 
     VAStatus QueryImageFormats(VAImageFormat *format_list, int *num_formats);
 
@@ -253,7 +275,13 @@ public:
 private:
     bool Initialize();
     VAStatus FillImageInfo(VAImage *image, SurfacePool *pool, VABufferID buf);
+    Surface *GetOrCreateSurfaceMemory(SurfacePool *pool, VASurfaceID surface_id);
+    Surface *GetImageSurface(VABufferID buf_id, bool create);
+    void ComputeDefaultLayout(uint32_t width, uint32_t height, uint32_t format,
+        uint32_t lengths[CIX_VAAPI_MAX_PLANES],
+        uint32_t pitches[CIX_VAAPI_MAX_PLANES]);
 
+    std::recursive_mutex lock_;
     uint32_t surface_count;
     std::vector<SurfacePool *> surface_pools;
     BufferPool buffer_pool;
@@ -263,10 +291,10 @@ private:
     DUMP_HANDLE frame_dump;
     typedef std::map<VAContextID, VAConfigID> ContextConfigMap;
     ContextConfigMap context_config_map;
-    // Keep this declared after surface_pools so it is destroyed first.
-    // MediaDeviceV4l2Stateful::~MediaDeviceV4l2Stateful() may call
-    // RemoveContextFromSurfaces(), which traverses surface_pools.
-    // cme_ is declared before v4l2_ so it is destroyed after v4l2_ (C++ reverse order).
+    // Destruction order is handled explicitly in ~MediaDevice():
+    //   1. v4l2_ (codec destructors call RemoveContextFromSurfaces()),
+    //   2. surface pools (surface cleanup callbacks call into cme_),
+    //   3. cme_.
     std::unique_ptr<MediaDeviceCme> cme_;
     std::unique_ptr<MediaDeviceV4l2Stateful> v4l2_;
     bool initialized_;

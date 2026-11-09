@@ -47,13 +47,13 @@ public:
     );
     ~V4l2StatefulDecoder();
 
-    virtual void CreateBuffers() override;
-    virtual void AddSurfaces(uint32_t num) override;
+    virtual int32_t CreateBuffers() override;
+    virtual int32_t AddSurfaces(uint32_t num) override;
     virtual void SetPicParamBuffer(void *data, uint32_t size, VABufferID id) override;
     virtual int32_t SetIQMatrix(void *data, uint32_t size) override;
     virtual void SetSliceParamBuffer(void *data, uint32_t size, uint32_t num_elements) override;
-    virtual void SetSliceDataBuffer(void *data, uint32_t size, VABufferID id) override;
-    virtual void SetSpsBuffer(void *data, uint32_t size, VABufferID id) override;
+    virtual int32_t SetSliceDataBuffer(void *data, uint32_t size, VABufferID id) override;
+    virtual int32_t SetSpsBuffer(void *data, uint32_t size, VABufferID id) override;
     virtual void ResetFrameData() override;
     virtual int32_t InitializeBuffers(VABufferID render_target) override;
     virtual int32_t ProcessBuffers(VABufferID *buffers, int num_buffers) override;
@@ -65,6 +65,9 @@ public:
 private:
     DataBlock *GetDataBlockByBufferId(uint32_t id);
     void RemoveDataBlockByBufferId(uint32_t id);
+    // Makes sure data_cache can hold "needed" more bytes after data_offset,
+    // growing it (and rebasing the stored blocks) when necessary.
+    uint8_t *ReserveDataCache(uint32_t needed);
     Packer *packer;
     Parser *parser;
     Buffer bits_cache;
@@ -73,12 +76,12 @@ private:
     uint32_t slice_param_count;
     uint32_t slice_data_count;
     uint32_t sps_count;
+    int32_t sps_id;
     bool first_slice;
+    uint64_t frame_count;
+    DUMP_HANDLE bits_dump;
     std::vector<DataBlock> data_blocks;
     V4l2Buffer *buf;
-    DUMP_HANDLE bits_dump;
-    uint64_t frame_count;
-    int32_t sps_id;
 };
 
 #endif  // V4L2_STATEFUL_DEC_H_

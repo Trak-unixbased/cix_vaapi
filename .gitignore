@@ -1,8 +1,11 @@
-build*
+/build*/
+/debian-build/
+/dist/
+*.deb
 .vscode/
 *.drawio.dtmp
 CMakeFiles
-*.cmake
-**/Makefile
 CMakeCache.txt
+cmake_install.cmake
+**/Makefile
 *.so

@@ -39,6 +39,8 @@ PackerHEVC::PackerHEVC() :
     update_pps(false),
     update_scaling_list(false),
     sps_inserted(false),
+    last_sps_id(-1),
+    last_pps_id(-1),
     custom_scaling_lists(0)
 {
     memset(&pic_param, 0xFF, sizeof(VAPictureParameterBufferHEVC));
@@ -96,8 +98,10 @@ void PackerHEVC::SetPictureParameter(void *data, uint32_t size)
         return;
 
     DetectPPSChange((VAPictureParameterBufferHEVC *)data);
-    if (update_pps)
-        pic_param = *(VAPictureParameterBufferHEVC *)data;
+    // Always keep the latest picture parameters: they also carry SPS-level
+    // fields (scaling_list_enabled_flag, bit depths...) which were left stale
+    // when only those changed.
+    pic_param = *(VAPictureParameterBufferHEVC *)data;
 
     // TODO: handle this unsupported error
     CIX_VAAPI_CHECK_RETURN(pic_param.pic_fields.bits.chroma_format_idc == 1,
@@ -208,6 +212,10 @@ void PackerHEVC::PackVpsNalu(void *out, uint32_t out_size, uint32_t &offset)
 {
     if (!update_vps)
         return;
+    if (!HasRoom(out_size, offset)) {
+        CIX_VAAPI_ERROR("No room for the VPS in the bitstream buffer\n");
+        return;
+    }
 
     void *cache;
     uint32_t cache_size;
@@ -225,12 +233,21 @@ void PackerHEVC::PackVpsNalu(void *out, uint32_t out_size, uint32_t &offset)
 
 void PackerHEVC::PackSpsNalu(void *out, uint32_t out_size, uint32_t &offset)
 {
+    // The SPS comes from the client (CopySPS): its short-term RPS sets cannot
+    // be rebuilt from VAPictureParameterBufferHEVC.
+    (void)out;
+    (void)out_size;
+    (void)offset;
 }
 
 void PackerHEVC::PackPpsNalu(void *out, uint32_t out_size, uint32_t &offset, int32_t sps_id, int32_t pps_id)
 {
     if (!update_pps && last_sps_id == sps_id && last_pps_id == pps_id)
         return;
+    if (!HasRoom(out_size, offset)) {
+        CIX_VAAPI_ERROR("No room for the PPS in the bitstream buffer\n");
+        return;
+    }
 
     void *cache;
     uint32_t cache_size;
@@ -244,14 +261,20 @@ void PackerHEVC::PackPpsNalu(void *out, uint32_t out_size, uint32_t &offset, int
     offset += AddEmulationPrevention((uint8_t *)out + offset, out_size - offset,
                                      (uint8_t *)cache, bytes);
     update_pps = false;
+    // These were never assigned (and not initialized): the "unchanged PPS"
+    // shortcut compared against garbage.
+    last_sps_id = sps_id;
+    last_pps_id = pps_id;
 }
 
 void PackerHEVC::PackSliceNalu(void *out, uint32_t out_size, uint32_t &offset, void *in, uint32_t in_size, void *slice_header)
 {
+    (void)out; (void)out_size; (void)offset; (void)in; (void)in_size; (void)slice_header;
 }
 
 void PackerHEVC::PackFrame(void *in, uint32_t in_size, void *out, uint32_t out_size)
 {
+    (void)in; (void)in_size; (void)out; (void)out_size;
 }
 
 uint32_t PackerHEVC::CopySPS(void *out, uint32_t out_size, void *seq_hdr)
@@ -263,6 +286,10 @@ uint32_t PackerHEVC::CopySPS(void *out, uint32_t out_size, void *seq_hdr)
     uint8_t *in = (uint8_t *)seq_header->data;
     uint32_t in_size = seq_header->size;
     uint32_t offset = 0;
+    // Start code + emulation prevention can grow the SPS by ~1/3 at most.
+    CIX_VAAPI_CHECK_RETURN_CODE(in != nullptr && in_size >= 3 &&
+        (uint64_t)in_size * 3 / 2 + 8 <= out_size, 0,
+        "SPS of %u bytes does not fit in %u bytes\n", in_size, out_size);
     offset += AddStartCode((uint8_t *)out, false);
     uint8_t *buf = (uint8_t *)out + offset;
     if (seq_header->has_cropping) {
@@ -272,6 +299,8 @@ uint32_t PackerHEVC::CopySPS(void *out, uint32_t out_size, void *seq_hdr)
         uint32_t cache_size;
         uint32_t bytes = seq_header->bit_offset.conformance_window_flag >> 3;
         GetCache(&cache, &cache_size);
+        CIX_VAAPI_CHECK_RETURN_CODE(cache != nullptr && bytes < in_size && in_size + 1 <= cache_size, 0,
+            "Invalid SPS conformance window offset\n");
         memcpy(cache, in, bytes);
         // Repack conformance_window_flag as 0
         uint32_t bits = seq_header->bit_offset.conformance_window_flag & 7;
@@ -296,6 +325,12 @@ uint32_t PackerHEVC::CopySPS(void *out, uint32_t out_size, void *seq_hdr)
 uint32_t PackerHEVC::CopySlice(void *out, uint32_t out_size, void *in, uint32_t in_size, bool first_slice)
 {
     uint32_t offset = 0;
+    // The slice used to be copied without checking the space left in the
+    // V4L2 bitstream buffer (heap overflow on large intra frames).
+    if (out == nullptr || in == nullptr || (uint64_t)in_size + 4 > out_size) {
+        CIX_VAAPI_ERROR("Slice of %u bytes does not fit in %u bytes\n", in_size, out_size);
+        return 0;
+    }
     offset += AddStartCode((uint8_t *)out, !first_slice);
     memcpy((uint8_t *)out + offset, in, in_size);
     offset += in_size;
@@ -355,7 +390,10 @@ void PackerHEVC::PackProfileTierLevel()
     cix_bsw_write_bit(s, 0); // general_frame_only_constraint_flag
     cix_bsw_write(s, 7, 0); // general_reserved_zero_7bits
     cix_bsw_write_bit(s, 0); // general_one_picture_only_constraint_flag
-    cix_bsw_write(s, 35, 0); // general_reserved_zero_35bits
+    // cix_bsw_write() accepts at most 32 bits per call (the 64-bit pending
+    // register overflows otherwise): split general_reserved_zero_35bits.
+    cix_bsw_write(s, 3, 0);  // general_reserved_zero_35bits[34:32]
+    cix_bsw_write(s, 32, 0); // general_reserved_zero_35bits[31:0]
     cix_bsw_write_bit(s, 0); // general_inbld_flag
     cix_bsw_write(s, 8, 186); // general_level_idc, 186 means level 6.2
 }
@@ -363,7 +401,6 @@ void PackerHEVC::PackProfileTierLevel()
 void PackerHEVC::PackVPS()
 {
     cix_bsw_ctx *s = &p;
-    bool is_8bit = pic_param.bit_depth_luma_minus8 == 0 && pic_param.bit_depth_chroma_minus8 == 0;
 
     cix_bsw_write(s, 4, 0); // vps_video_parameter_set_id
     cix_bsw_write_bit(s, 1); // vps_base_layer_internal_flag
@@ -584,4 +621,3 @@ void PackerHEVC::PackPPS(int32_t sps_id, int32_t pps_id)
 void PackerHEVC::PackSliceHeader()
 {
 }
-

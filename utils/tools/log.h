@@ -19,9 +19,11 @@
 
 #include <stdint.h>
 #include <stdio.h>
-#include <thread>
 #include <time.h>
+#include <thread>
 #include <mutex>
+#include <string>
+#include <sstream>
 
 enum LogLevel {
     LOG_LEVEL_ERROR = 0,
@@ -30,9 +32,8 @@ enum LogLevel {
     LOG_LEVEL_DEBUG,
 };
 
-#include <sstream>
-
 extern std::mutex log_mutex;
+extern int32_t log_level;
 
 inline std::string tid_to_string(std::thread::id tid) {
     std::ostringstream oss;
@@ -40,41 +41,49 @@ inline std::string tid_to_string(std::thread::id tid) {
     return oss.str();
 }
 
+// localtime_r() is used instead of localtime(): the latter returns a pointer
+// to a static buffer shared with the host application.
 #define CIX_VAAPI_LOG_PREFIX \
     do { \
-        struct timespec ts; \
-        timespec_get(&ts, TIME_UTC); \
-        struct tm *tm_info = localtime(&ts.tv_sec); \
-        char time_buffer[10]; \
-        strftime(time_buffer, 10, "%H:%M:%S", tm_info); \
+        struct timespec ts_; \
+        struct tm tm_info_; \
+        char time_buffer_[16]; \
+        timespec_get(&ts_, TIME_UTC); \
+        localtime_r(&ts_.tv_sec, &tm_info_); \
+        strftime(time_buffer_, sizeof(time_buffer_), "%H:%M:%S", &tm_info_); \
         fprintf(stderr, "%s.%06ld %16s ", \
-            time_buffer, ts.tv_nsec / 1000, \
+            time_buffer_, ts_.tv_nsec / 1000, \
             tid_to_string(std::this_thread::get_id()).c_str()); \
     } while (0)
 
 #define CIX_VAAPI_LOG(level, ...) \
     do { \
         if (log_level >= LOG_LEVEL_##level) { \
-            const std::lock_guard<std::mutex> lock(log_mutex); \
+            const std::lock_guard<std::mutex> lock_(log_mutex); \
             CIX_VAAPI_LOG_PREFIX; \
-            fprintf(stderr, "[" #level "] " __VA_ARGS__); \
+            fprintf(stderr, "[cix-vaapi][" #level "] " __VA_ARGS__); \
             fflush(stderr); \
         } \
     } while (0)
 
+// The whole check is wrapped in do { } while (0) so the macros behave like a
+// single statement (the previous "if (...) do { } while (0)" form captured a
+// following "else" branch of the caller).
 #define CIX_VAAPI_LOG_RETURN(level, exp, ...) \
-    if (!(exp)) \
-        do { \
+    do { \
+        if (!(exp)) { \
             CIX_VAAPI_LOG(level, __VA_ARGS__); \
             return; \
-        } while (0)
+        } \
+    } while (0)
 
 #define CIX_VAAPI_LOG_RETURN_CODE(level, exp, rcode, ...) \
-    if (!(exp)) \
-        do { \
+    do { \
+        if (!(exp)) { \
             CIX_VAAPI_LOG(level, __VA_ARGS__); \
             return rcode; \
-        } while (0)
+        } \
+    } while (0)
 
 #define CIX_VAAPI_ERROR(...) CIX_VAAPI_LOG(ERROR, __VA_ARGS__)
 #define CIX_VAAPI_WARNING(...) CIX_VAAPI_LOG(WARNING, __VA_ARGS__)
@@ -88,9 +97,11 @@ inline std::string tid_to_string(std::thread::id tid) {
 #define CIX_VAAPI_ENTER_FUNCTION CIX_VAAPI_DEBUG("Enter %s\n", __func__)
 #define CIX_VAAPI_EXIT_FUNCTION CIX_VAAPI_DEBUG("Exit %s\n", __func__)
 
-extern int32_t log_level;
-
 void SetLogLevel();
-char *GetFourccString(uint32_t fourcc);
+
+// Returns a printable FOURCC. The string lives in a small per-thread ring
+// buffer, so several calls can be used in the same printf() and concurrent
+// threads do not overwrite each other's result.
+const char *GetFourccString(uint32_t fourcc);
 
 #endif  // LOG_H_

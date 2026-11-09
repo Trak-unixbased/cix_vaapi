@@ -24,17 +24,18 @@
 class ExtractorH264 : public Extractor {
 public:
     ExtractorH264();
-    ~ExtractorH264() {};
+    ~ExtractorH264() override {}
 
-    virtual void SetSequenceParameter(void *data, uint32_t size);
-    virtual void SetPictureParameter(void *data, uint32_t size);
-    virtual void SetSliceParameter(void *data, uint32_t size);
-    virtual uint32_t GetCodedBufferID();
+    virtual void SetSequenceParameter(void *data, uint32_t size) override;
+    virtual void SetPictureParameter(void *data, uint32_t size) override;
+    virtual void SetSliceParameter(void *data, uint32_t size) override;
+    virtual uint32_t GetCodedBufferID() override;
     virtual uint32_t GetBitrate() override;
     virtual uint32_t GetFrameRateDenominator() override { return seq_param.time_scale; }
     virtual uint32_t GetFrameRateNumerator() override { return seq_param.num_units_in_tick; }
     virtual uint32_t GetGopSize() override { return seq_param.intra_period; }
-    virtual uint32_t GetBFrames() override { return seq_param.ip_period - 1; }
+    // ip_period == 0 (unset) used to wrap around to 0xffffffff B-frames.
+    virtual uint32_t GetBFrames() override { return seq_param.ip_period > 1 ? seq_param.ip_period - 1 : 0; }
     virtual uint32_t GetQP() override { return qp; }
     virtual uint32_t GetCodingType() override;
     virtual uint8_t GetLevel() override { return seq_param.level_idc; }

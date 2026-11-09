@@ -23,8 +23,10 @@
 
 class Parser {
 public:
-    Parser() {};
-    ~Parser() {};
+    Parser() {}
+    // Virtual: parsers are deleted through a Parser pointer (ParserHEVC owns
+    // a heap buffer that was leaked).
+    virtual ~Parser() {}
     virtual void SetPictureParameter(void *data, uint32_t size) {};
     virtual int32_t GetSPSID(void *data, uint32_t size) { return -1; };
     virtual int32_t GetPPSID() { return -1; };
